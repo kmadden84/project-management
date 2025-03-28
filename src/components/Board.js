@@ -478,7 +478,7 @@ export default function Board() {
   return (
     <div className="p-4 max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white bg-gradient-to-r from-gray-900 to-blue-800 dark:from-blue-400 dark:to-indigo-300 bg-clip-text text-transparent">Project Management Board</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white bg-gradient-to-r from-gray-900 to-blue-800 dark:from-blue-400 dark:to-indigo-300 bg-clip-text text-transparent">Your Dashboard</h1>
         
         <div className="relative" ref={optionsRef}>
           <button 

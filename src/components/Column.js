@@ -313,15 +313,21 @@ export default function Column({
                 items={tasks.map(task => task.id)}
                 strategy={horizontalListSortingStrategy}
               >
-                {tasks.map((task) => (
-                  <div key={task.id} className="p-3 w-full min-w-full flex-shrink-0">
-                    <Task
-                      task={task}
-                      onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
-                      onCancel={handleTaskCancel}
-                    />
-                  </div>
-                ))}
+                {tasks.map((task) => {
+                  const hasMultipleTasks = tasks.filter(t => t.title || t.description || t.deadline).length >= 2;
+                  return (
+                    <div 
+                      key={task.id} 
+                      className={`p-3 w-full min-w-full flex-shrink-0 ${hasMultipleTasks ? 'px-8' : 'px-3'}`}
+                    >
+                      <Task
+                        task={task}
+                        onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
+                        onCancel={handleTaskCancel}
+                      />
+                    </div>
+                  );
+                })}
               </SortableContext>
               
               {tasks.length === 0 && (
@@ -333,30 +339,30 @@ export default function Column({
             </div>
             
             {/* Navigation buttons for mobile */}
-            {tasks.length > 1 && tasks.filter(task => task.title || task.description || task.deadline).length >= 2 && (
-              <div className="absolute inset-x-0 top-1/2 transform -translate-y-1/2 flex justify-between px-1 pointer-events-none">
+            {tasks.filter(task => task.title || task.description || task.deadline).length >= 2 && (
+              <div className="absolute inset-x-0 top-1/2 transform -translate-y-1/2 flex justify-between pointer-events-none">
                 <button 
                   onClick={goToPrevTask}
-                  className={`p-1.5 rounded-full bg-white/70 dark:bg-gray-800/70 shadow-md pointer-events-auto ${currentTaskIndex === 0 ? 'opacity-30' : 'opacity-80'} backdrop-blur-sm`}
+                  className={`p-2 ml-0.5 rounded-full bg-white/90 dark:bg-gray-800/90 shadow-lg pointer-events-auto ${currentTaskIndex === 0 ? 'opacity-0' : 'opacity-90 hover:opacity-100'} backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200`}
                   disabled={currentTaskIndex === 0}
                   aria-label="Previous task"
                 >
-                  <ChevronLeftIcon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
+                  <ChevronLeftIcon className="h-6 w-6 text-gray-700 dark:text-gray-200" />
                 </button>
                 
                 <button 
                   onClick={goToNextTask}
-                  className={`p-1.5 rounded-full bg-white/70 dark:bg-gray-800/70 shadow-md pointer-events-auto ${currentTaskIndex === tasks.length - 1 ? 'opacity-30' : 'opacity-80'} backdrop-blur-sm`}
+                  className={`p-2 mr-0.5 rounded-full bg-white/90 dark:bg-gray-800/90 shadow-lg pointer-events-auto ${currentTaskIndex === tasks.length - 1 ? 'opacity-0' : 'opacity-90 hover:opacity-100'} backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200`}
                   disabled={currentTaskIndex === tasks.length - 1}
                   aria-label="Next task"
                 >
-                  <ChevronRightIcon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
+                  <ChevronRightIcon className="h-6 w-6 text-gray-700 dark:text-gray-200" />
                 </button>
               </div>
             )}
             
             {/* Page indicator dots */}
-            {tasks.length > 1 && tasks.filter(task => task.title || task.description || task.deadline).length >= 2 && (
+            {tasks.filter(task => task.title || task.description || task.deadline).length >= 2 && (
               <div className="absolute bottom-0 inset-x-0 flex justify-center gap-1 py-1">
                 {tasks.map((_, index) => (
                   <div 
