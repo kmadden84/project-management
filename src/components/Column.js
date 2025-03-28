@@ -58,7 +58,7 @@ const scrollbarStyles = `
   }
 `;
 
-export default function Column({ 
+const Column = React.forwardRef(({ 
   id, 
   title, 
   tasks, 
@@ -67,8 +67,14 @@ export default function Column({
   onTaskDelete, 
   isCollapsed: parentIsCollapsed,
   onToggleCollapse,
-  className
-}) {
+  className = '',
+  onTaskDrop
+}, ref) => {
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
+  const taskListRef = useRef(null);
+  
   // Initialize with the parent's collapsed state or default (based on mobile & column ID)
   const defaultState = id !== 'todo' && window.innerWidth < 640;
   const [localCollapsed, setLocalCollapsed] = useState(
@@ -77,11 +83,6 @@ export default function Column({
   
   // Determine if this column is collapsed based on local and parent states
   const isCollapsed = parentIsCollapsed !== undefined ? parentIsCollapsed : localCollapsed;
-  
-  // Mobile detection and task swiping
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
-  const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
-  const taskListRef = useRef(null);
   
   // Add the styles to the document only once on the client side
   useEffect(() => {
@@ -213,6 +214,46 @@ export default function Column({
     }
   };
   
+  const handleHeaderClick = (e) => {
+    // Only toggle if clicking the header itself or the chevron
+    if (e.target.closest('.column-header')) {
+      onToggleCollapse();
+    }
+  };
+
+  const handleDragOver = (e) => {
+    // Prevent default to allow drop
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Set drop effect
+    e.dataTransfer.dropEffect = 'move';
+    
+    if (!isDragOver) {
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    // Only consider it a leave if we're leaving the column
+    // and not just moving between its children
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDragOver(false);
+    
+    const taskId = e.dataTransfer.getData('text/plain');
+    if (taskId && onTaskDrop) {
+      onTaskDrop(taskId, id);
+    }
+  };
+
   // Navigate to the previous task (mobile only)
   const goToPrevTask = (e) => {
     e.stopPropagation();
@@ -242,168 +283,137 @@ export default function Column({
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`bg-gradient-to-br ${getColumnColor()} rounded-xl backdrop-blur-sm border ${getBorderColor()} 
-        shadow-lg shadow-gray-200/50 dark:shadow-gray-900/30 flex flex-col
-        transition-all duration-300 ease-in-out
-        ${isCollapsed ? 'h-[60px] min-h-[60px]' : 'min-h-[200px] max-h-[calc(100vh-120px)]'}
-        ${className || 'w-full sm:w-[calc(50%-12px)] xl:w-[calc(25%-18px)]'}`}
+    <div 
+      ref={ref}
+      data-column-id={id}
+      className={`bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm rounded-xl shadow-lg border ${
+        isDragOver 
+          ? 'border-blue-400/70 dark:border-blue-500/70 bg-blue-50/30 dark:bg-blue-900/30' 
+          : 'border-gray-200/50 dark:border-gray-700/50'
+      } overflow-hidden transition-all duration-300 ease-in-out ${className}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       <div 
-        className={`p-4 border-b ${!isCollapsed ? 'border-gray-200/50 dark:border-gray-700/50' : 'border-transparent'} flex items-center justify-between sticky top-0 z-10 ${getHeaderAccent()} rounded-t-xl backdrop-blur-sm cursor-pointer`}
-        onClick={handleToggleCollapse}
+        className="column-header flex items-center justify-between p-4 bg-gray-50/80 dark:bg-gray-800/80 cursor-pointer sticky top-0 z-10"
+        onClick={handleHeaderClick}
       >
-        <div className="flex items-center gap-2 flex-grow overflow-hidden">
-          <button 
-            className="p-1 hover:bg-white/30 dark:hover:bg-gray-700/50 rounded-md flex-shrink-0 transition-colors"
-            onClick={handleToggleCollapse}
-            aria-label={isCollapsed ? "Expand column" : "Collapse column"}
-          >
-            {isCollapsed ? (
-              <ChevronRightIcon className="h-4 w-4 text-gray-600 dark:text-gray-300" />
-            ) : (
-              <ChevronDownIcon className="h-4 w-4 text-gray-600 dark:text-gray-300" />
-            )}
-          </button>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-            {title}
-          </h2>
+        <div className="flex items-center gap-2 overflow-hidden">
+          <h3 className="font-medium text-gray-900 dark:text-white truncate">{title}</h3>
           <span className="text-sm py-0.5 px-2 rounded-full bg-white/50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-200 font-medium flex-shrink-0 border border-gray-200/50 dark:border-gray-600/50">
             {tasks.filter(task => task.title || task.description || task.deadline).length}
           </span>
         </div>
-        {!isCollapsed && (
+        <div className="flex items-center space-x-2 flex-shrink-0">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onAddTask();
             }}
-            className="flex-shrink-0 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-white/60 dark:bg-gray-700/60 hover:bg-white dark:hover:bg-gray-700 transition-colors ml-1 shadow-sm backdrop-blur-sm"
-            style={{
-              borderRadius: '0.75rem',
-              height: '32px',
-              minWidth: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '0 12px'
-            }}
-            data-testid={`add-task-${id}`}
-            aria-label="Add Task"
+            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
           >
             <PlusIcon className="h-5 w-5" />
-            <span className="hidden lg:inline ml-1">Add</span>
           </button>
-        )}
+          <ChevronDownIcon 
+            className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${!isCollapsed ? 'rotate-180' : ''}`}
+          />
+        </div>
       </div>
-
+      
       <div 
-        className={`overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[1000px] opacity-100'}`}
+        className={`transition-all duration-300 ease-in-out overflow-hidden ${
+          isCollapsed ? 'max-h-0' : 'max-h-[1000px]'
+        }`}
+        onClick={(e) => e.stopPropagation()}
       >
-        {isMobile ? (
-          <div className="relative h-full p-1">
+        {isMobile && !isCollapsed && tasks.length > 1 ? (
+          <div className="relative px-1 pt-1 pb-6">
             {/* Swipeable container */}
             <div 
               ref={taskListRef}
-              className="task-swiper overflow-x-auto flex items-stretch w-full pb-2"
-              style={{ overflowY: 'hidden' }}
+              className="overflow-x-auto flex snap-x snap-mandatory scrollbar-hide"
+              style={{ scrollSnapType: 'x mandatory' }}
             >
-              <SortableContext
-                items={tasks.map(task => task.id)}
-                strategy={horizontalListSortingStrategy}
-              >
-                {tasks.map((task) => {
-                  const hasMultipleTasks = tasks.filter(t => t.title || t.description || t.deadline).length >= 2;
-                  return (
-                    <div 
-                      key={task.id} 
-                      className={`p-3 w-full min-w-full flex-shrink-0 ${hasMultipleTasks ? 'px-8' : 'px-3'}`}
-                    >
-                      <Task
-                        task={task}
-                        onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
-                        onCancel={handleTaskCancel}
-                      />
-                    </div>
-                  );
-                })}
-              </SortableContext>
-              
-              {tasks.length === 0 && (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400 w-full">
-                  <p>No tasks yet</p>
-                  <p className="text-sm mt-1">Drag tasks here or click Add Task</p>
+              {tasks.map((task) => (
+                <div 
+                  key={task.id} 
+                  className="w-full flex-shrink-0 snap-center p-3"
+                  style={{ scrollSnapAlign: 'center' }}
+                >
+                  <Task
+                    key={task.id}
+                    task={task}
+                    onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
+                    onCancel={onTaskDelete}
+                  />
                 </div>
-              )}
+              ))}
             </div>
             
-            {/* Navigation buttons for mobile */}
-            {tasks.filter(task => task.title || task.description || task.deadline).length >= 2 && (
-              <div className="absolute inset-x-0 top-1/2 transform -translate-y-1/2 flex justify-between pointer-events-none">
+            {/* Navigation buttons */}
+            {tasks.length > 1 && (
+              <div className="absolute inset-x-0 top-1/2 transform -translate-y-1/2 flex justify-between px-1 pointer-events-none">
                 <button 
                   onClick={goToPrevTask}
-                  className={`p-2 ml-0.5 rounded-full bg-white/90 dark:bg-gray-800/90 shadow-lg pointer-events-auto ${currentTaskIndex === 0 ? 'opacity-0' : 'opacity-90 hover:opacity-100'} backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200`}
+                  className={`p-1.5 rounded-full bg-white/70 dark:bg-gray-800/70 shadow-md pointer-events-auto ${currentTaskIndex === 0 ? 'opacity-30' : 'opacity-80'} backdrop-blur-sm`}
                   disabled={currentTaskIndex === 0}
                   aria-label="Previous task"
                 >
-                  <ChevronLeftIcon className="h-6 w-6 text-gray-700 dark:text-gray-200" />
+                  <ChevronLeftIcon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
                 </button>
                 
                 <button 
                   onClick={goToNextTask}
-                  className={`p-2 mr-0.5 rounded-full bg-white/90 dark:bg-gray-800/90 shadow-lg pointer-events-auto ${currentTaskIndex === tasks.length - 1 ? 'opacity-0' : 'opacity-90 hover:opacity-100'} backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200`}
+                  className={`p-1.5 rounded-full bg-white/70 dark:bg-gray-800/70 shadow-md pointer-events-auto ${currentTaskIndex === tasks.length - 1 ? 'opacity-30' : 'opacity-80'} backdrop-blur-sm`}
                   disabled={currentTaskIndex === tasks.length - 1}
                   aria-label="Next task"
                 >
-                  <ChevronRightIcon className="h-6 w-6 text-gray-700 dark:text-gray-200" />
+                  <ChevronRightIcon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
                 </button>
               </div>
             )}
             
             {/* Page indicator dots */}
-            {tasks.filter(task => task.title || task.description || task.deadline).length >= 2 && (
-              <div className="absolute bottom-0 inset-x-0 flex justify-center gap-1 py-1">
+            {tasks.length > 1 && (
+              <div className="absolute bottom-1 inset-x-0 flex justify-center gap-1 py-1">
                 {tasks.map((_, index) => (
                   <div 
                     key={index}
-                    className={`h-1.5 rounded-full task-indicator ${
+                    className={`h-1.5 rounded-full ${
                       currentTaskIndex === index 
-                        ? 'task-indicator-active bg-blue-500/80 dark:bg-blue-400/80' 
-                        : 'bg-gray-300/80 dark:bg-gray-600/80 w-4'
-                    }`}
+                        ? 'bg-blue-500/80 dark:bg-blue-400/80 w-4' 
+                        : 'bg-gray-300/80 dark:bg-gray-600/80 w-2'
+                    } transition-all duration-200`}
                   />
                 ))}
               </div>
             )}
           </div>
         ) : (
-          <div className="p-4 overflow-y-auto custom-scrollbar">
-            <div className="space-y-4">
-              <SortableContext
-                items={tasks.map(task => task.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {tasks.map((task) => (
-                  <Task
-                    key={task.id}
-                    task={task}
-                    onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
-                    onCancel={handleTaskCancel}
-                  />
-                ))}
-              </SortableContext>
-              
-              {tasks.length === 0 && (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400 backdrop-blur-sm bg-white/40 dark:bg-gray-800/40 rounded-lg p-4 border border-gray-200/50 dark:border-gray-700/50">
-                  <p>No tasks yet</p>
-                  <p className="text-sm mt-1">Drag tasks here or click Add Task</p>
-                </div>
-              )}
-            </div>
+          <div className="p-4 space-y-4">
+            {tasks.map((task) => (
+              <Task
+                key={task.id}
+                task={task}
+                onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
+                onCancel={onTaskDelete}
+              />
+            ))}
+            
+            {tasks.length === 0 && (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p>No tasks yet</p>
+                <p className="text-sm mt-1">Add or drag tasks here</p>
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
   );
-} 
+});
+
+Column.displayName = 'Column';
+
+export default Column; 

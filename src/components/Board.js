@@ -475,10 +475,55 @@ export default function Board() {
     setAnalyticsSectionCollapsed(!analyticsSectionCollapsed);
   };
 
+  // Add the columnsRef that was missing
+  const columnsRef = useRef(new Map());
+
+  // Handle task drop
+  const handleTaskDrop = (taskId, targetColumnId) => {
+    const sourceColumn = columns.find(col => 
+      col.tasks.some(task => task.id === taskId)
+    );
+    
+    if (!sourceColumn || sourceColumn.id === targetColumnId) {
+      return;
+    }
+    
+    const taskToMove = sourceColumn.tasks.find(task => task.id === taskId);
+    if (!taskToMove) return;
+    
+    // Move task to new column
+    setColumns(columns => {
+      return columns.map(col => {
+        // Remove from source column
+        if (col.id === sourceColumn.id) {
+          return {
+            ...col,
+            tasks: col.tasks.filter(task => task.id !== taskId)
+          };
+        }
+        // Add to target column
+        if (col.id === targetColumnId) {
+          // Sort tasks by deadline if we have sortTasksByDeadline function
+          if (typeof sortTasksByDeadline === 'function') {
+            return {
+              ...col,
+              tasks: sortTasksByDeadline([...col.tasks, taskToMove])
+            };
+          }
+          return {
+            ...col,
+            tasks: [...col.tasks, taskToMove]
+          };
+        }
+        return col;
+      });
+    });
+  };
+
   return (
     <div className="p-4 max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white bg-gradient-to-r from-gray-900 to-blue-800 dark:from-blue-400 dark:to-indigo-300 bg-clip-text text-transparent">Your Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white bg-gradient-to-r from-gray-900 to-blue-800 dark:from-blue-400 dark:to-indigo-300 bg-clip-text text-transparent">Project Management Board</h1>
         
         <div className="relative" ref={optionsRef}>
           <button 
@@ -548,56 +593,32 @@ export default function Board() {
         
         {!tasksSectionCollapsed && (
           <div className="p-4">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCorners}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <div className="flex flex-col sm:flex-row flex-wrap gap-6 justify-center sm:justify-start">
-                <SortableContext
-                  items={columns.map((col) => col.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {columns.map((column) => (
-                    <Column
-                      key={column.id}
-                      id={column.id}
-                      title={column.title}
-                      tasks={column.tasks}
-                      onAddTask={() => addTask(column.id)}
-                      onTaskUpdate={(taskId, updatedTask) =>
-                        handleTaskUpdate(column.id, taskId, updatedTask)
-                      }
-                      onTaskDelete={(taskId) => handleTaskDelete(column.id, taskId)}
-                      isCollapsed={!columnStates[column.id]}
-                      onToggleCollapse={() => handleColumnToggle(column.id, !columnStates[column.id])}
-                      className="w-full sm:w-[calc(50%-12px)] xl:w-[calc(25%-18px)]"
-                    />
-                  ))}
-                </SortableContext>
-              </div>
-              <DragOverlay>
-                {activeTask ? (
-                  <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-xl p-4 shadow-xl shadow-gray-300/30 dark:shadow-gray-900/30 w-[280px] transform rotate-2 border-l-4 border-l-blue-500">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                      {activeTask.title}
-                    </h3>
-                    {activeTask.description && (
-                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                        {activeTask.description}
-                      </p>
-                    )}
-                    {activeTask.deadline && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 flex items-center bg-blue-50/50 dark:bg-blue-900/20 px-2 py-1 rounded-lg inline-block">
-                        <CalendarIcon className="h-4 w-4 mr-1" />
-                        Due: {format(new Date(activeTask.deadline), 'MMM d, yyyy h:mm aa')}
-                      </p>
-                    )}
-                  </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-6 justify-center sm:justify-start">
+              {columns.map((column) => (
+                <Column
+                  key={column.id}
+                  id={column.id}
+                  ref={el => {
+                    if (el) {
+                      columnsRef.current.set(column.id, el);
+                    } else {
+                      columnsRef.current.delete(column.id);
+                    }
+                  }}
+                  title={column.title}
+                  tasks={column.tasks}
+                  onAddTask={() => addTask(column.id)}
+                  onTaskUpdate={(taskId, updatedTask) =>
+                    handleTaskUpdate(column.id, taskId, updatedTask)
+                  }
+                  onTaskDelete={(taskId) => handleTaskDelete(column.id, taskId)}
+                  isCollapsed={!columnStates[column.id]}
+                  onToggleCollapse={() => handleColumnToggle(column.id, !columnStates[column.id])}
+                  className="w-full sm:w-[calc(50%-12px)] xl:w-[calc(25%-18px)]"
+                  onTaskDrop={handleTaskDrop}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>

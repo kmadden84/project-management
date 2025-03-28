@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Add custom scrollbar hiding class */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Safari and Chrome */
+  }
+}
+
 @layer base {
   body {
     @apply antialiased;

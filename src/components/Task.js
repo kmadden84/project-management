@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { PencilIcon, TrashIcon, XMarkIcon, CheckIcon, CalendarIcon, ClockIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-
-// Simpler date handling
+import { PencilIcon, TrashIcon, XMarkIcon, CheckIcon, CalendarIcon, ClockIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import dayjs from 'dayjs';
 
 // Custom DatePicker component
@@ -432,128 +428,35 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
   );
 };
 
-export default function Task({ task, onUpdate, onCancel }) {
-  const [editedTask, setEditedTask] = useState({ ...task });
+// Simplified Task component
+export default function Task(props) {
+  const { task, onUpdate, onCancel, onDragStart, onDrag, onDragEnd } = props;
   const [isEditing, setIsEditing] = useState(task.isEditing || false);
+  const [editedTask, setEditedTask] = useState({ ...task });
   const [errors, setErrors] = useState({});
   const [timeDropdownOpen, setTimeDropdownOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const titleInputRef = useRef(null);
   const timeButtonRef = useRef(null);
   const dateButtonRef = useRef(null);
-  
-  // Add custom styles for select dropdown
-  useEffect(() => {
-    // Check if the style already exists
-    if (!document.getElementById('custom-select-styles')) {
-      const style = document.createElement('style');
-      style.id = 'custom-select-styles';
-      style.innerHTML = `
-        /* Customize select appearance */
-        select.time-select {
-          appearance: none;
-          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-          background-position: right 0.5rem center;
-          background-repeat: no-repeat;
-          background-size: 1.5em 1.5em;
-          padding-right: 2.5rem;
-        }
-        
-        /* Customize option groups */
-        select.time-select optgroup {
-          font-size: 0.75rem;
-          font-weight: bold;
-          color: #6B7280;
-          background-color: #f8f9fa;
-          padding: 4px 8px;
-        }
-        
-        /* Customize options */
-        select.time-select option {
-          padding: 8px 12px;
-          font-size: 0.875rem;
-        }
-        
-        /* Selected option styling */
-        select.time-select option:checked {
-          background-color: #3b82f6;
-          color: white;
-        }
-        
-        /* Hover effect */
-        select.time-select option:hover {
-          background-color: #f3f4f6;
-        }
-        
-        /* Dark mode adjustments */
-        @media (prefers-color-scheme: dark) {
-          select.time-select optgroup {
-            background-color: #1f2937;
-            color: #9ca3af;
-          }
-          
-          select.time-select option:hover {
-            background-color: #374151;
-          }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-  }, []);
+  const taskRef = useRef(null);
 
-  // Start in edit mode for empty new tasks
+  useEffect(() => {
+    setEditedTask(task);
+    setIsEditing(task.isEditing || false);
+    setErrors({});
+  }, [task]);
+
   useEffect(() => {
     if (task.isEditing && titleInputRef.current) {
       titleInputRef.current.focus();
     }
   }, [task.isEditing]);
-  
-  // Close time dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (timeButtonRef.current && !timeButtonRef.current.contains(event.target) && timeDropdownOpen) {
-        setTimeDropdownOpen(false);
-      }
-    }
-    
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [timeDropdownOpen]);
-  
-  // Update edited task when task prop changes
-  useEffect(() => {
-    setEditedTask(task);
-    // Also update editing state if task.isEditing changes
-    setIsEditing(task.isEditing || false);
-    setErrors({});
-  }, [task]);
-
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: task.id,
-    disabled: isEditing,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 0 : 1,
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setEditedTask((prev) => ({ ...prev, [name]: value }));
     
-    // Clear error for this field if it exists
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: null }));
     }
@@ -571,12 +474,10 @@ export default function Task({ task, onUpdate, onCancel }) {
     }
     
     try {
-      // Get the current time from the existing deadline or use current time
       const currentTime = editedTask.deadline 
         ? dayjs(editedTask.deadline) 
         : dayjs();
       
-      // Create a new date with the selected date but keep the current time
       const newDate = dayjs(value)
         .hour(currentTime.hour())
         .minute(currentTime.minute())
@@ -585,7 +486,6 @@ export default function Task({ task, onUpdate, onCancel }) {
       
       setEditedTask((prev) => ({ ...prev, deadline: newDate }));
       
-      // Clear deadline error if it exists
       if (errors.deadline) {
         setErrors(prev => ({ ...prev, deadline: null }));
       }
@@ -594,119 +494,33 @@ export default function Task({ task, onUpdate, onCancel }) {
     }
   };
 
-  // Generate time options
-  const generateTimeOptions = () => {
-    // Create times in half-hour increments (12am to 11:30pm)
-    const times = [];
-    for (let hour = 0; hour < 24; hour++) {
-      const hourDisplay = hour % 12 === 0 ? 12 : hour % 12;
-      const period = hour < 12 ? 'AM' : 'PM';
-      
-      // On the hour
-      times.push({
-        display: `${hourDisplay}:00 ${period}`,
-        hour: hour,
-        minute: 0,
-        period
-      });
-      
-      // Half hour
-      times.push({
-        display: `${hourDisplay}:30 ${period}`,
-        hour: hour,
-        minute: 30,
-        period
-      });
-    }
-    
-    return times;
-  };
-  
-  // Get current time selection index
-  const getCurrentTimeIndex = () => {
-    if (!editedTask.deadline) {
-      // Default to 12:00 PM
-      return generateTimeOptions().findIndex(t => t.display === '12:00 PM');
-    }
-    
-    const d = dayjs(editedTask.deadline);
-    const hour = d.hour();
-    const minute = d.minute();
-    
-    // Find closest time (rounding down)
-    const timeIndex = generateTimeOptions().findIndex(
-      t => t.hour === hour && (minute < 30 ? t.minute === 0 : t.minute === 30)
-    );
-    
-    return timeIndex !== -1 ? timeIndex : 0;
-  };
-
-  // For debugging
-  console.log("Current deadline in state:", editedTask.deadline);
-
   const handleSubmit = () => {
-    // Validate form before submission
     if (!validateForm()) {
       return;
     }
     
-    // Update the task
     onUpdate(editedTask);
     setIsEditing(false);
   };
 
   const handleCancel = () => {
-    // If it's a new task (no content) and we cancel, delete it
     if (!task.title && !task.description && !task.deadline) {
       onCancel(task.id);
       return;
     }
     
-    // Otherwise reset to original values
     setEditedTask(task);
     setIsEditing(false);
     setErrors({});
   };
 
   const handleDelete = (e) => {
-    // Stop propagation to prevent drag and other events
     e.stopPropagation();
     e.preventDefault();
     
     if (onCancel) {
       onCancel(task.id);
     }
-  };
-
-  // Handle time change directly
-  const handleTimeChange = (hour, minute) => {
-    // Create a new date based on the existing one or current date
-    const date = editedTask.deadline ? new Date(editedTask.deadline) : new Date();
-    
-    // Update the time components
-    date.setHours(hour);
-    date.setMinutes(minute);
-    date.setSeconds(0);
-    date.setMilliseconds(0);
-    
-    // Update both edited task state and parent component
-    const updatedTask = { ...editedTask, deadline: date };
-    setEditedTask(updatedTask);
-    
-    // Directly update the parent component
-    if (isEditing) {
-      // Don't automatically update the parent during editing, wait for Save
-    } else {
-      onUpdate(updatedTask);
-    }
-    
-    // Clear any deadline errors
-    if (errors.deadline) {
-      setErrors(prev => ({ ...prev, deadline: null }));
-    }
-    
-    // Close dropdown
-    setTimeDropdownOpen(false);
   };
 
   const validateForm = () => {
@@ -728,54 +542,71 @@ export default function Task({ task, onUpdate, onCancel }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Format date for date input (YYYY-MM-DD)
   const formatDateForInput = (date) => {
     if (!date) return '';
     const d = dayjs(date);
     return d.format('YYYY-MM-DD');
   };
   
-  // Format date for display (MMM D, YYYY)
   const formatDateForDisplay = (date) => {
     if (!date) return 'Select date';
     const d = dayjs(date);
     return d.format('MMM D, YYYY');
   };
   
-  // Format time for display (hh:mm A)
   const formatTimeForDisplay = (date) => {
     if (!date) return '12:00 PM';
     
-    // Convert to Date object if it's an ISO string
     const d = new Date(date);
     
-    // Format manually to ensure consistency
     let hours = d.getHours();
     const minutes = d.getMinutes().toString().padStart(2, '0');
     const period = hours >= 12 ? 'PM' : 'AM';
     
-    // Convert to 12-hour format
     hours = hours % 12;
     hours = hours === 0 ? 12 : hours;
     
     return `${hours}:${minutes} ${period}`;
   };
 
-  // Don't show empty tasks in view mode
   if (!isEditing && !task.title && !task.description && !task.deadline) {
     return null;
   }
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 shadow-lg shadow-gray-200/40 dark:shadow-gray-900/40 border ${
-        isEditing 
+      ref={taskRef}
+      id={`task-${task.id}`}
+      className={`group bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 shadow-lg shadow-gray-200/40 dark:shadow-gray-900/40 border ${
+        task.isEditing 
           ? 'border-blue-300/50 dark:border-blue-700/50 ring-2 ring-blue-200/50 dark:ring-blue-800/30' 
           : 'border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300/70 dark:hover:border-gray-600/70'
-      } transition-all duration-200`}
+      } transition-all duration-200 select-none relative ${!isEditing ? 'cursor-move hover:shadow-md' : ''}`}
+      draggable={!isEditing}
+      onDragStart={(e) => {
+        if (isEditing) {
+          e.preventDefault();
+          return;
+        }
+        
+        e.dataTransfer.setData('text/plain', task.id);
+        e.dataTransfer.effectAllowed = 'move';
+        
+        // Add some delay to make dragging visual
+        setTimeout(() => {
+          e.target.classList.add('opacity-50');
+        }, 0);
+        
+        if (onDragStart) {
+          onDragStart(task.id);
+        }
+      }}
+      onDragEnd={(e) => {
+        e.target.classList.remove('opacity-50');
+        if (onDragEnd) {
+          onDragEnd(task.id);
+        }
+      }}
     >
       {isEditing ? (
         // Edit Mode
@@ -836,10 +667,7 @@ export default function Task({ task, onUpdate, onCancel }) {
                 <SimpleTimeSelector 
                   value={editedTask.deadline}
                   onChange={(date) => {
-                    // Update task with new date
                     setEditedTask({...editedTask, deadline: date});
-                    
-                    // Clear deadline error if it exists
                     if (errors.deadline) {
                       setErrors(prev => ({ ...prev, deadline: null }));
                     }
@@ -870,27 +698,36 @@ export default function Task({ task, onUpdate, onCancel }) {
         </div>
       ) : (
         // View Mode
-        <div className="space-y-2 relative">
+        <div className="space-y-2">
           <div className="flex items-start justify-between">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white flex-grow" {...listeners}>{task.title}</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white flex-grow">{task.title}</h3>
             <div className="flex space-x-1 ml-2">
               <button
-                onClick={() => setIsEditing(true)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsEditing(true);
+                }}
+                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
                 aria-label="Edit task"
               >
                 <PencilIcon className="h-4 w-4" />
               </button>
               <button
-                onClick={handleDelete}
-                className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 rounded-lg transition-colors z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  if (onCancel) {
+                    onCancel(task.id);
+                  }
+                }}
+                className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 aria-label="Delete task"
               >
                 <TrashIcon className="h-4 w-4" />
               </button>
             </div>
           </div>
-          <div {...listeners}>
+          <div>
             {task.description && (
               <p className="text-sm text-gray-600 dark:text-gray-300 bg-gray-50/50 dark:bg-gray-700/50 p-2 rounded-lg">{task.description}</p>
             )}
@@ -909,6 +746,11 @@ export default function Task({ task, onUpdate, onCancel }) {
                 </div>
               </div>
             )}
+          </div>
+          
+          {/* Drag handle indicator */}
+          <div className="absolute top-1 left-1 text-gray-300 dark:text-gray-600 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+            <ArrowsPointingOutIcon className="h-3 w-3" />
           </div>
         </div>
       )}
