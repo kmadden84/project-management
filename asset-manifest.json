@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/Tasks-and-Analytics/static/css/main.b2d8af6c.css",
-    "main.js": "/Tasks-and-Analytics/static/js/main.71b3af70.js",
-    "static/js/453.47924b75.chunk.js": "/Tasks-and-Analytics/static/js/453.47924b75.chunk.js",
-    "index.html": "/Tasks-and-Analytics/index.html",
-    "main.b2d8af6c.css.map": "/Tasks-and-Analytics/static/css/main.b2d8af6c.css.map",
-    "main.71b3af70.js.map": "/Tasks-and-Analytics/static/js/main.71b3af70.js.map",
-    "453.47924b75.chunk.js.map": "/Tasks-and-Analytics/static/js/453.47924b75.chunk.js.map"
+    "main.css": "/project-management/static/css/main.b2d8af6c.css",
+    "main.js": "/project-management/static/js/main.61816e4e.js",
+    "static/js/453.47924b75.chunk.js": "/project-management/static/js/453.47924b75.chunk.js",
+    "index.html": "/project-management/index.html",
+    "main.b2d8af6c.css.map": "/project-management/static/css/main.b2d8af6c.css.map",
+    "main.61816e4e.js.map": "/project-management/static/js/main.61816e4e.js.map",
+    "453.47924b75.chunk.js.map": "/project-management/static/js/453.47924b75.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.b2d8af6c.css",
-    "static/js/main.71b3af70.js"
+    "static/js/main.61816e4e.js"
   ]
 }
