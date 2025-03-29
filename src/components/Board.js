@@ -51,7 +51,7 @@ export default function Board() {
   const [columnStates, setColumnStates] = useState(() => {
     const isMobileView = window.innerWidth < 640;
     return {
-      todo: true, // Todo is always expanded 
+      todo: !isMobileView, // Todo follows the same pattern as other columns
       'in-progress': !isMobileView, 
       review: !isMobileView,
       done: !isMobileView
@@ -63,8 +63,9 @@ export default function Board() {
   
   // Update allColumnsCollapsed based on column states
   useEffect(() => {
-    // Check if all non-todo columns are collapsed
-    const areAllCollapsed = !columnStates['in-progress'] && 
+    // Check if ALL columns are collapsed (including todo)
+    const areAllCollapsed = !columnStates['todo'] && 
+                          !columnStates['in-progress'] && 
                           !columnStates['review'] && 
                           !columnStates['done'];
     
@@ -79,7 +80,7 @@ export default function Board() {
     // Reset column states when switching between mobile and desktop
     if (mobile !== isMobile) {
       setColumnStates(prev => ({
-        todo: true, // Todo is always expanded
+        todo: !mobile, // Todo follows the same pattern as other columns
         'in-progress': !mobile,
         review: !mobile,
         done: !mobile
@@ -267,9 +268,9 @@ export default function Board() {
     const newState = !allColumnsCollapsed;
     setAllColumnsCollapsed(newState);
     
-    // Update all column states
+    // Update all column states - make all columns collapsible including todo
     setColumnStates({
-      todo: true, // Todo is always expanded
+      todo: !newState, // Todo is now collapsible too
       'in-progress': !newState,
       review: !newState,
       done: !newState
