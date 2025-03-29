@@ -21,6 +21,7 @@ A modern, responsive task management and analytics application built with React 
 - **Glassmorphism UI**: Modern glass-like UI with backdrop blur effects
 - **Smooth Animations**: Polished transitions and animations throughout the app
 - **Toast Notifications**: Feedback notifications for important actions
+- **Ease of use**: Ability to drag tasks to different status categories
 
 ### Data Management
 - **Persistent Storage**: Local storage integration to save and retrieve board state
@@ -36,6 +37,7 @@ A modern, responsive task management and analytics application built with React 
 
 ### Accessibility and UX
 - **System Theme Detection**: Automatic theme selection based on system preferences
+- **Save State**: Save state in local storage so you never lose your progress
 - **Keyboard Navigation**: Support for keyboard controls for improved accessibility
 - **Mobile-Optimized Interactions**: Special handling for touch devices
 - **Confirmation Dialogs**: Prevent accidental data loss with confirmation prompts
