@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { DndContext, closestCorners, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import Column from './Column';
@@ -11,12 +11,12 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useTheme } from './ThemeProvider';
 
 // Custom toast content with icon for board save
-const BoardSavedToast = () => (
+const BoardSavedToast = React.memo(() => (
   <div className="flex items-center">
     <CheckCircleIcon className="h-5 w-5 mr-2 text-green-600 dark:text-green-400" />
     <span>Board state and preferences saved!</span>
   </div>
-);
+));
 
 const defaultColumns = [
   { id: 'todo', title: 'To Do', tasks: [] },
@@ -71,30 +71,30 @@ export default function Board() {
     setAllColumnsCollapsed(areAllCollapsed);
   }, [columnStates]);
   
-  useEffect(() => {
-    // Check if we're on mobile
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 640;
-      setIsMobile(mobile);
-      
-      // Reset column states when switching between mobile and desktop
-      if (mobile !== isMobile) {
-        setColumnStates(prev => ({
-          todo: true, // Todo is always expanded
-          'in-progress': !mobile,
-          review: !mobile,
-          done: !mobile
-        }));
-      }
-    };
+  // Check for mobile resolution and resize handling - memoized
+  const checkMobile = useCallback(() => {
+    const mobile = window.innerWidth < 640;
+    setIsMobile(mobile);
     
+    // Reset column states when switching between mobile and desktop
+    if (mobile !== isMobile) {
+      setColumnStates(prev => ({
+        todo: true, // Todo is always expanded
+        'in-progress': !mobile,
+        review: !mobile,
+        done: !mobile
+      }));
+    }
+  }, [isMobile]);
+  
+  useEffect(() => {
     // Initialize
     checkMobile();
     
     // Update on resize
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, [isMobile]);
+  }, [checkMobile]);
 
   // Create a ref for the options dropdown container
   const optionsRef = useRef(null);
@@ -139,8 +139,8 @@ export default function Board() {
     }
   }, [darkMode]);
 
-  // Save board state to localStorage
-  const saveBoardState = () => {
+  // Save board state to localStorage - memoized
+  const saveBoardState = useCallback(() => {
     // Save the board columns and tasks
     localStorage.setItem('boardState', JSON.stringify(columns));
     
@@ -165,10 +165,10 @@ export default function Board() {
     );
     
     setShowOptions(false);
-  };
+  }, [columns, saveThemePreference]);
 
-  // Toggle dark mode
-  const toggleDarkMode = () => {
+  // Toggle dark mode - memoized
+  const toggleDarkMode = useCallback(() => {
     // Use the ThemeProvider's toggleTheme function to ensure consistency
     toggleTheme();
     
@@ -195,16 +195,16 @@ export default function Board() {
     
     setShowThemeModal(false);
     setShowOptions(false);
-  };
+  }, [darkMode, toggleTheme]);
 
-  // Show theme selection modal
-  const showThemeSelector = () => {
+  // Show theme selection modal - memoized
+  const showThemeSelector = useCallback(() => {
     setShowOptions(false);
     setShowThemeModal(true);
-  };
+  }, []);
 
-  // Select light mode
-  const selectLightMode = () => {
+  // Select light mode - memoized
+  const selectLightMode = useCallback(() => {
     // Only change if we're not already in light mode
     if (darkMode) {
       toggleTheme();
@@ -228,10 +228,10 @@ export default function Board() {
     }
     
     setShowThemeModal(false);
-  };
+  }, [darkMode, toggleTheme]);
   
-  // Select dark mode
-  const selectDarkMode = () => {
+  // Select dark mode - memoized
+  const selectDarkMode = useCallback(() => {
     // Only change if we're not already in dark mode
     if (!darkMode) {
       toggleTheme();
@@ -255,15 +255,15 @@ export default function Board() {
     }
     
     setShowThemeModal(false);
-  };
+  }, [darkMode, toggleTheme]);
 
-  // Cancel theme selection
-  const cancelThemeSelection = () => {
+  // Cancel theme selection - memoized
+  const cancelThemeSelection = useCallback(() => {
     setShowThemeModal(false);
-  };
+  }, []);
 
-  // Toggle collapse state for all columns
-  const toggleAllColumns = () => {
+  // Toggle collapse state for all columns - memoized
+  const toggleAllColumns = useCallback(() => {
     const newState = !allColumnsCollapsed;
     setAllColumnsCollapsed(newState);
     
@@ -276,10 +276,10 @@ export default function Board() {
     });
     
     setShowOptions(false);
-  };
+  }, [allColumnsCollapsed]);
 
-  // Handle individual column collapse toggle - connected to the Column component
-  const handleColumnToggle = (columnId, isCollapsed) => {
+  // Handle individual column collapse toggle - memoized
+  const handleColumnToggle = useCallback((columnId) => {
     // Allow all columns to be collapsible
     setColumnStates(prev => {
       const newState = {
@@ -289,8 +289,9 @@ export default function Board() {
       
       return newState;
     });
-  };
+  }, []);
 
+  // Setup drag sensors - memoized
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -298,23 +299,25 @@ export default function Board() {
     })
   );
 
-  const findColumnByTaskId = (taskId) => {
+  // Find column by task ID - memoized
+  const findColumnByTaskId = useCallback((taskId) => {
     return columns.find(column => 
       column.tasks.some(task => task.id === taskId)
     );
-  };
+  }, [columns]);
 
-  const handleDragStart = (event) => {
+  // Handle drag start - memoized
+  const handleDragStart = useCallback((event) => {
     const { active } = event;
     const activeColumn = findColumnByTaskId(active.id);
     if (activeColumn) {
       const task = activeColumn.tasks.find(t => t.id === active.id);
       setActiveTask(task);
     }
-  };
+  }, [findColumnByTaskId]);
 
-  // Sort tasks by deadline
-  const sortTasksByDeadline = (tasks) => {
+  // Sort tasks by deadline - memoized
+  const sortTasksByDeadline = useCallback((tasks) => {
     return [...tasks].sort((a, b) => {
       // If both have deadlines, sort by date (most urgent first)
       if (a.deadline && b.deadline) {
@@ -330,9 +333,10 @@ export default function Board() {
       // If neither has a deadline, maintain the existing order
       return 0;
     });
-  };
+  }, []);
 
-  const handleDragEnd = (event) => {
+  // Handle drag end - memoized
+  const handleDragEnd = useCallback((event) => {
     const { active, over } = event;
     setActiveTask(null);
 
@@ -354,29 +358,28 @@ export default function Board() {
 
     // Get the active task
     const activeTask = activeColumn.tasks.find(task => task.id === activeId);
+    if (!activeTask) return;
     
     // If dropping on a column
     if (isOverColumn) {
-      setColumns(columns => {
-        return columns.map(col => {
-          // Remove from source column
-          if (col.id === activeColumn.id) {
-            return {
-              ...col,
-              tasks: col.tasks.filter(task => task.id !== activeId)
-            };
-          }
-          // Add to target column and sort by deadline
-          if (col.id === overId) {
-            const updatedTasks = [...col.tasks, activeTask];
-            return {
-              ...col,
-              tasks: sortTasksByDeadline(updatedTasks)
-            };
-          }
-          return col;
-        });
-      });
+      setColumns(columns.map(col => {
+        // Remove from source column
+        if (col.id === activeColumn.id) {
+          return {
+            ...col,
+            tasks: col.tasks.filter(task => task.id !== activeId)
+          };
+        }
+        // Add to target column and sort by deadline
+        if (col.id === overId) {
+          const updatedTasks = [...col.tasks, activeTask];
+          return {
+            ...col,
+            tasks: sortTasksByDeadline(updatedTasks)
+          };
+        }
+        return col;
+      }));
     } 
     // If dropping on another task
     else {
@@ -385,48 +388,45 @@ export default function Board() {
         const overTaskIndex = overColumn.tasks.findIndex(task => task.id === overId);
         const activeTaskIndex = activeColumn.tasks.findIndex(task => task.id === activeId);
         
-        setColumns(columns => {
-          return columns.map(col => {
-            if (col.id === activeColumn.id) {
-              const newTasks = [...col.tasks];
-              newTasks.splice(activeTaskIndex, 1);
-              newTasks.splice(overTaskIndex, 0, activeTask);
-              return {
-                ...col,
-                tasks: newTasks
-              };
-            }
-            return col;
-          });
-        });
+        setColumns(columns.map(col => {
+          if (col.id === activeColumn.id) {
+            const newTasks = [...col.tasks];
+            newTasks.splice(activeTaskIndex, 1);
+            newTasks.splice(overTaskIndex, 0, activeTask);
+            return {
+              ...col,
+              tasks: newTasks
+            };
+          }
+          return col;
+        }));
       } 
       // Move to a different column and sort by deadline
       else {
-        setColumns(columns => {
-          return columns.map(col => {
-            // Remove from source column
-            if (col.id === activeColumn.id) {
-              return {
-                ...col,
-                tasks: col.tasks.filter(task => task.id !== activeId)
-              };
-            }
-            // Add to target column and sort by deadline instead of inserting at specific position
-            if (col.id === overColumn.id) {
-              const updatedTasks = [...col.tasks, activeTask];
-              return {
-                ...col,
-                tasks: sortTasksByDeadline(updatedTasks)
-              };
-            }
-            return col;
-          });
-        });
+        setColumns(columns.map(col => {
+          // Remove from source column
+          if (col.id === activeColumn.id) {
+            return {
+              ...col,
+              tasks: col.tasks.filter(task => task.id !== activeId)
+            };
+          }
+          // Add to target column and sort by deadline instead of inserting at specific position
+          if (col.id === overColumn.id) {
+            const updatedTasks = [...col.tasks, activeTask];
+            return {
+              ...col,
+              tasks: sortTasksByDeadline(updatedTasks)
+            };
+          }
+          return col;
+        }));
       }
     }
-  };
+  }, [columns, findColumnByTaskId, sortTasksByDeadline]);
 
-  const addTask = (columnId) => {
+  // Add task to column - memoized
+  const addTask = useCallback((columnId) => {
     const newTask = {
       id: `task-${Date.now()}`,
       title: '',
@@ -447,9 +447,10 @@ export default function Board() {
           : column
       )
     );
-  };
+  }, [sortTasksByDeadline]);
 
-  const handleTaskUpdate = (columnId, taskId, updatedTask) => {
+  // Update task in column - memoized
+  const handleTaskUpdate = useCallback((columnId, taskId, updatedTask) => {
     setColumns(columns =>
       columns.map(column =>
         column.id === columnId
@@ -466,9 +467,10 @@ export default function Board() {
           : column
       )
     );
-  };
+  }, [sortTasksByDeadline]);
 
-  const handleTaskDelete = (columnId, taskId) => {
+  // Delete task from column - memoized
+  const handleTaskDelete = useCallback((columnId, taskId) => {
     setColumns(columns =>
       columns.map(column =>
         column.id === columnId
@@ -476,16 +478,16 @@ export default function Board() {
           : column
       )
     );
-  };
+  }, []);
 
-  // Prompt for clear all tasks
-  const promptClearAllTasks = () => {
+  // Prompt for clear all tasks - memoized
+  const promptClearAllTasks = useCallback(() => {
     setShowOptions(false);
     setShowClearConfirmation(true);
-  };
+  }, []);
 
-  // Clear all tasks from all columns
-  const handleClearAllTasks = () => {
+  // Clear all tasks from all columns - memoized
+  const handleClearAllTasks = useCallback(() => {
     setColumns(columns =>
       columns.map(column => ({
         ...column,
@@ -493,15 +495,15 @@ export default function Board() {
       }))
     );
     setShowClearConfirmation(false);
-  };
+  }, []);
 
-  // Cancel clear all tasks
-  const cancelClearAllTasks = () => {
+  // Cancel clear all tasks - memoized
+  const cancelClearAllTasks = useCallback(() => {
     setShowClearConfirmation(false);
-  };
+  }, []);
 
-  // Export all tasks as CSV
-  const handleExportCSV = () => {
+  // Export all tasks as CSV - memoized
+  const handleExportCSV = useCallback(() => {
     // Prepare the CSV data
     const csvRows = [];
     
@@ -539,10 +541,59 @@ export default function Board() {
     document.body.removeChild(link);
     
     setShowOptions(false);
-  };
+  }, [columns]);
 
-  // Calculate progress statistics for analytics
-  const calculateAnalytics = () => {
+  // Toggle Tasks section collapse - memoized
+  const toggleTasksSection = useCallback(() => {
+    setTasksSectionCollapsed(!tasksSectionCollapsed);
+  }, [tasksSectionCollapsed]);
+  
+  // Toggle Analytics section collapse - memoized
+  const toggleAnalyticsSection = useCallback(() => {
+    setAnalyticsSectionCollapsed(!analyticsSectionCollapsed);
+  }, [analyticsSectionCollapsed]);
+
+  // Add the columnsRef that was missing
+  const columnsRef = useRef(new Map());
+
+  // Handle task drop - memoized
+  const handleTaskDrop = useCallback((taskId, targetColumnId) => {
+    const sourceColumn = columns.find(col => 
+      col.tasks.some(task => task.id === taskId)
+    );
+    
+    if (!sourceColumn || sourceColumn.id === targetColumnId) {
+      return;
+    }
+    
+    const taskToMove = sourceColumn.tasks.find(task => task.id === taskId);
+    if (!taskToMove) return;
+    
+    // Move task to new column
+    setColumns(columns => {
+      return columns.map(col => {
+        // Remove from source column
+        if (col.id === sourceColumn.id) {
+          return {
+            ...col,
+            tasks: col.tasks.filter(task => task.id !== taskId)
+          };
+        }
+        // Add to target column
+        if (col.id === targetColumnId) {
+          // Sort tasks by deadline if we have sortTasksByDeadline function
+          return {
+            ...col,
+            tasks: sortTasksByDeadline([...col.tasks, taskToMove])
+          };
+        }
+        return col;
+      });
+    });
+  }, [columns, sortTasksByDeadline]);
+  
+  // Calculate progress statistics for analytics - memoized
+  const analytics = useMemo(() => {
     const totalTasks = columns.reduce((total, column) => total + column.tasks.length, 0);
     const completedTasks = columns.find(col => col.id === 'done')?.tasks.length || 0;
     const inProgressTasks = columns.find(col => col.id === 'in-progress')?.tasks.length || 0;
@@ -578,65 +629,35 @@ export default function Board() {
       overdueTasks,
       completedEarlyTasks
     };
-  };
+  }, [columns]);
   
-  // Get analytics data
-  const analytics = calculateAnalytics();
-  
-  // Toggle Tasks section collapse
-  const toggleTasksSection = () => {
-    setTasksSectionCollapsed(!tasksSectionCollapsed);
-  };
-  
-  // Toggle Analytics section collapse
-  const toggleAnalyticsSection = () => {
-    setAnalyticsSectionCollapsed(!analyticsSectionCollapsed);
-  };
-
-  // Add the columnsRef that was missing
-  const columnsRef = useRef(new Map());
-
-  // Handle task drop
-  const handleTaskDrop = (taskId, targetColumnId) => {
-    const sourceColumn = columns.find(col => 
-      col.tasks.some(task => task.id === taskId)
-    );
-    
-    if (!sourceColumn || sourceColumn.id === targetColumnId) {
-      return;
-    }
-    
-    const taskToMove = sourceColumn.tasks.find(task => task.id === taskId);
-    if (!taskToMove) return;
-    
-    // Move task to new column
-    setColumns(columns => {
-      return columns.map(col => {
-        // Remove from source column
-        if (col.id === sourceColumn.id) {
-          return {
-            ...col,
-            tasks: col.tasks.filter(task => task.id !== taskId)
-          };
-        }
-        // Add to target column
-        if (col.id === targetColumnId) {
-          // Sort tasks by deadline if we have sortTasksByDeadline function
-          if (typeof sortTasksByDeadline === 'function') {
-            return {
-              ...col,
-              tasks: sortTasksByDeadline([...col.tasks, taskToMove])
-            };
+  // Memoize rendered columns to prevent unnecessary re-renders
+  const renderedColumns = useMemo(() => {
+    return columns.map((column) => (
+      <Column
+        key={column.id}
+        id={column.id}
+        ref={el => {
+          if (el) {
+            columnsRef.current.set(column.id, el);
+          } else {
+            columnsRef.current.delete(column.id);
           }
-          return {
-            ...col,
-            tasks: [...col.tasks, taskToMove]
-          };
+        }}
+        title={column.title}
+        tasks={column.tasks}
+        onAddTask={() => addTask(column.id)}
+        onTaskUpdate={(taskId, updatedTask) =>
+          handleTaskUpdate(column.id, taskId, updatedTask)
         }
-        return col;
-      });
-    });
-  };
+        onTaskDelete={(taskId) => handleTaskDelete(column.id, taskId)}
+        isCollapsed={!columnStates[column.id]}
+        onToggleCollapse={() => handleColumnToggle(column.id)}
+        className="w-full sm:w-[calc(50%-12px)] xl:w-[calc(25%-18px)]"
+        onTaskDrop={handleTaskDrop}
+      />
+    ));
+  }, [columns, columnStates, addTask, handleTaskUpdate, handleTaskDelete, handleColumnToggle, handleTaskDrop]);
 
   return (
     <div className="p-4 max-w-7xl mx-auto">
@@ -720,30 +741,7 @@ export default function Board() {
         {!tasksSectionCollapsed && (
           <div className="p-4">
             <div className="flex flex-col sm:flex-row sm:flex-wrap gap-6 justify-center sm:justify-start">
-              {columns.map((column) => (
-                <Column
-                  key={column.id}
-                  id={column.id}
-                  ref={el => {
-                    if (el) {
-                      columnsRef.current.set(column.id, el);
-                    } else {
-                      columnsRef.current.delete(column.id);
-                    }
-                  }}
-                  title={column.title}
-                  tasks={column.tasks}
-                  onAddTask={() => addTask(column.id)}
-                  onTaskUpdate={(taskId, updatedTask) =>
-                    handleTaskUpdate(column.id, taskId, updatedTask)
-                  }
-                  onTaskDelete={(taskId) => handleTaskDelete(column.id, taskId)}
-                  isCollapsed={!columnStates[column.id]}
-                  onToggleCollapse={() => handleColumnToggle(column.id, !columnStates[column.id])}
-                  className="w-full sm:w-[calc(50%-12px)] xl:w-[calc(25%-18px)]"
-                  onTaskDrop={handleTaskDrop}
-                />
-              ))}
+              {renderedColumns}
             </div>
           </div>
         )}

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { PencilIcon, TrashIcon, XMarkIcon, CheckIcon, CalendarIcon, ClockIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import dayjs from 'dayjs';
+import { format } from 'date-fns';
 
 // Custom DatePicker component
 function DatePicker({ value, onChange, buttonRef, isOpen, onToggle }) {
@@ -9,6 +10,39 @@ function DatePicker({ value, onChange, buttonRef, isOpen, onToggle }) {
   const [selectedDate, setSelectedDate] = useState(value ? dayjs(value) : null);
   const dropdownRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+  
+  // Update position when opened
+  useLayoutEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: Math.max(rect.width, 280) // Ensure calendar is wide enough
+      });
+    }
+  }, [isOpen, buttonRef]);
+  
+  // Close when clicking outside
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    function handleClickOutside(event) {
+      if (
+        dropdownRef.current && 
+        !dropdownRef.current.contains(event.target) &&
+        buttonRef.current && 
+        !buttonRef.current.contains(event.target)
+      ) {
+        onToggle(false);
+      }
+    }
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen, onToggle, buttonRef]);
   
   // Set up the calendar days
   const daysInMonth = currentMonth.daysInMonth();
@@ -46,52 +80,18 @@ function DatePicker({ value, onChange, buttonRef, isOpen, onToggle }) {
     });
   }
   
-  // Update position when opened
-  useLayoutEffect(() => {
-    if (isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPosition({
-        top: rect.bottom + window.scrollY,
-        left: rect.left + window.scrollX,
-        width: Math.max(rect.width, 280) // Ensure calendar is wide enough
-      });
-    }
-  }, [isOpen, buttonRef]);
-  
-  // Close when clicking outside
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    function handleClickOutside(event) {
-      if (
-        dropdownRef.current && 
-        !dropdownRef.current.contains(event.target) &&
-        buttonRef.current && 
-        !buttonRef.current.contains(event.target)
-      ) {
-        onToggle(false);
-      }
-    }
-    
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen, onToggle, buttonRef]);
-  
   // Handle date selection
   const handleDateClick = (date) => {
-    const newDate = date.toDate();
-    
-    // If existing value, keep the time
-    if (value) {
-      const existingDate = dayjs(value);
-      newDate.setHours(existingDate.hour());
-      newDate.setMinutes(existingDate.minute());
-    }
-    
+    // Update local state
     setSelectedDate(date);
-    onChange({ target: { value: date.format('YYYY-MM-DD') } });
+    
+    // Get the date as a string in YYYY-MM-DD format
+    const formattedDate = date.format('YYYY-MM-DD');
+    
+    // Trigger the onChange handler with the formatted date
+    onChange({ target: { value: formattedDate } });
+    
+    // Close the date picker
     onToggle(false);
   };
   
@@ -177,6 +177,7 @@ function DatePicker({ value, onChange, buttonRef, isOpen, onToggle }) {
             return (
               <button
                 key={index}
+                type="button"
                 onClick={() => day.month === 'current' && handleDateClick(day.date)}
                 disabled={day.month !== 'current'}
                 className={dayClasses}
@@ -187,17 +188,29 @@ function DatePicker({ value, onChange, buttonRef, isOpen, onToggle }) {
           })}
         </div>
         
-        {/* Footer with clear button */}
-        <div className="mt-2 flex justify-start border-t border-gray-200 dark:border-gray-700 pt-2">
+        {/* Footer with clear and today buttons */}
+        <div className="mt-2 flex justify-between border-t border-gray-200 dark:border-gray-700 pt-2">
           <button
             onClick={() => {
-              onChange({ target: { value: '' } });
               setSelectedDate(null);
+              onChange({ target: { value: '' } });
               onToggle(false);
             }}
             className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
           >
             Clear
+          </button>
+          
+          <button
+            onClick={() => {
+              const today = dayjs();
+              setSelectedDate(today);
+              onChange({ target: { value: today.format('YYYY-MM-DD') } });
+              onToggle(false);
+            }}
+            className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/30"
+          >
+            Today
           </button>
         </div>
       </div>
@@ -207,7 +220,7 @@ function DatePicker({ value, onChange, buttonRef, isOpen, onToggle }) {
 }
 
 // Time dropdown component that renders in a portal
-function TimeDropdown({ isOpen, onClose, timeOptions, selectedIndex, onSelect, buttonRef }) {
+const TimeDropdown = React.memo(function TimeDropdown({ isOpen, onClose, timeOptions, selectedIndex, onSelect, buttonRef }) {
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
   const dropdownRef = useRef(null);
 
@@ -260,10 +273,10 @@ function TimeDropdown({ isOpen, onClose, timeOptions, selectedIndex, onSelect, b
     </div>,
     document.body
   );
-}
+});
 
 // For time selection - completely new implementation
-const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
+const SimpleTimeSelector = React.memo(({ value, onChange, buttonLabel = '12:00 PM' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [manualEntry, setManualEntry] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -293,25 +306,56 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
   }, []);
 
   // Generate time options (12-hour format with AM/PM)
-  const timeOptions = [];
-  ['AM', 'PM'].forEach(period => {
-    for (let hour = 0; hour < 12; hour++) {
-      const displayHour = hour === 0 ? 12 : hour;
-      const actualHour = period === 'AM' ? (hour === 12 ? 0 : hour) : (hour === 12 ? 12 : hour + 12);
-      
-      timeOptions.push({
-        label: `${displayHour}:00 ${period}`,
-        hour: actualHour,
-        minute: 0
-      });
-      
-      timeOptions.push({
-        label: `${displayHour}:30 ${period}`,
-        hour: actualHour,
-        minute: 30
-      });
-    }
-  });
+  const timeOptions = useMemo(() => {
+    const options = [];
+    const now = new Date();
+    
+    // Check if the selected date is today by comparing year, month, and day
+    const isToday = value && (() => {
+      const selectedDate = new Date(value);
+      return (
+        selectedDate.getFullYear() === now.getFullYear() &&
+        selectedDate.getMonth() === now.getMonth() &&
+        selectedDate.getDate() === now.getDate()
+      );
+    })();
+    
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    ['AM', 'PM'].forEach(period => {
+      for (let hour = 0; hour < 12; hour++) {
+        const displayHour = hour === 0 ? 12 : hour;
+        const actualHour = period === 'AM' ? (hour === 12 ? 0 : hour) : (hour === 12 ? 12 : hour + 12);
+        
+        // Skip past times if this is today
+        if (isToday && (actualHour < currentHour || (actualHour === currentHour && 0 < currentMinute))) {
+          continue;
+        }
+        
+        options.push({
+          label: `${displayHour}:00 ${period}`,
+          hour: actualHour,
+          minute: 0,
+          display: `${displayHour}:00 ${period}`
+        });
+        
+        // Skip past half-hour if this is today
+        if (isToday && (actualHour < currentHour || (actualHour === currentHour && 30 < currentMinute))) {
+          continue;
+        }
+        
+        options.push({
+          label: `${displayHour}:30 ${period}`,
+          hour: actualHour,
+          minute: 30,
+          display: `${displayHour}:30 ${period}`
+        });
+      }
+    });
+    
+    return options;
+  }, [value]);
 
   // Format time value for display
   const formatTimeDisplay = (date) => {
@@ -324,7 +368,8 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
     const displayHours = hours % 12 || 12;
     const displayMinutes = minutes.toString().padStart(2, '0');
     
-    return `${displayHours}:${displayMinutes} ${ampm}`;
+    const formattedDate = `${displayHours}:${displayMinutes} ${ampm}`;
+    return formattedDate;
   };
 
   // Check if a time option is currently selected
@@ -339,16 +384,27 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
     // Create a new date based on current value or today
     let date;
     if (value) {
+      // Start with the existing date to preserve the date portion
       date = new Date(value);
     } else {
+      // Default to today
       date = new Date();
     }
+    
+    // Store the original date
+    const originalDay = date.getDate();
     
     // Set the time components
     date.setHours(hour);
     date.setMinutes(minute);
     date.setSeconds(0);
     date.setMilliseconds(0);
+    
+    // If the date changed due to timezone issues (e.g., shifted to next day),
+    // correct it back to the original date
+    if (date.getDate() !== originalDay) {
+      date.setDate(originalDay);
+    }
     
     // Call the onChange handler with the new date
     onChange(date);
@@ -363,7 +419,6 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
       const match = inputValue.match(timeRegex);
       
       if (!match) {
-        console.error('Invalid time format');
         return;
       }
       
@@ -375,7 +430,6 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
       if (period) {
         // 12-hour format
         if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) {
-          console.error('Invalid time values');
           return;
         }
         
@@ -388,7 +442,6 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
       } else {
         // 24-hour format
         if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-          console.error('Invalid time values');
           return;
         }
       }
@@ -401,18 +454,42 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
         date = new Date();
       }
       
+      // Store the original date for later comparison
+      const originalDay = date.getDate();
+      
+      // Check if this is today
+      const now = new Date();
+      const isToday = 
+        date.getFullYear() === now.getFullYear() &&
+        date.getMonth() === now.getMonth() &&
+        date.getDate() === now.getDate();
+      
+      // If today, check if time is in the past
+      if (isToday && (
+        hours < now.getHours() || 
+        (hours === now.getHours() && minutes < now.getMinutes())
+      )) {
+        alert("Cannot set a time in the past. Please choose a future time.");
+        return;
+      }
+      
       // Set the time components
       date.setHours(hours);
       date.setMinutes(minutes);
       date.setSeconds(0);
       date.setMilliseconds(0);
       
+      // If the date changed due to timezone issues, correct it
+      if (date.getDate() !== originalDay) {
+        date.setDate(originalDay);
+      }
+      
       // Call the onChange handler with the new date
       onChange(date);
       setManualEntry(false);
       setIsOpen(false);
     } catch (error) {
-      console.error('Error parsing time:', error);
+      // Silent error handling
     }
   };
 
@@ -545,157 +622,273 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
       )}
     </div>
   );
-};
+});
 
 // Simplified Task component
-export default function Task(props) {
-  const { task, onUpdate, onCancel, onDragStart, onDrag, onDragEnd } = props;
+export default React.memo(function Task(props) {
+  const { task, onUpdate, onDelete } = props;
+  
   const [isEditing, setIsEditing] = useState(task.isEditing || false);
-  const [editedTask, setEditedTask] = useState({ ...task });
+  const [editedTask, setEditedTask] = useState(task);
   const [errors, setErrors] = useState({});
-  const [timeDropdownOpen, setTimeDropdownOpen] = useState(false);
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const titleInputRef = useRef(null);
-  const timeButtonRef = useRef(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   const dateButtonRef = useRef(null);
-  const taskRef = useRef(null);
-
+  const timeButtonRef = useRef(null);
+  const menuRef = useRef(null);
+  
+  // Update editedTask when the original task changes
   useEffect(() => {
     setEditedTask(task);
     setIsEditing(task.isEditing || false);
-    setErrors({});
   }, [task]);
-
-  useEffect(() => {
-    if (task.isEditing && titleInputRef.current) {
-      titleInputRef.current.focus();
-    }
-  }, [task.isEditing]);
-
-  const handleInputChange = (e) => {
+  
+  // Handle input changes - memoized
+  const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
-    setEditedTask((prev) => ({ ...prev, [name]: value }));
-    
+    setEditedTask(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear any previous error for this field
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: null }));
     }
-  };
-
-  const handleDateChange = (e) => {
-    const { value } = e.target;
+  }, [errors]);
+  
+  // Handle date change
+  const handleDateChange = useCallback((e) => {
+    const dateValue = e.target.value;
     
-    if (!value) {
-      setEditedTask(prev => ({ ...prev, deadline: null }));
-      if (errors.deadline) {
-        setErrors(prev => ({ ...prev, deadline: null }));
-      }
+    if (!dateValue) {
+      // If date was cleared, show error since it's required
+      setErrors(prev => ({
+        ...prev,
+        deadline: 'Deadline is required'
+      }));
       return;
     }
     
     try {
-      const currentTime = editedTask.deadline 
-        ? dayjs(editedTask.deadline) 
-        : dayjs();
+      // Parse the date string correctly (YYYY-MM-DD)
+      // Create a new date that preserves the local timezone by setting it at noon
+      const [year, month, day] = dateValue.split('-').map(num => parseInt(num, 10));
+      // Create the date at noon to avoid timezone shifting issues
+      const newDate = new Date(year, month - 1, day, 12, 0, 0);
       
-      const newDate = dayjs(value)
-        .hour(currentTime.hour())
-        .minute(currentTime.minute())
-        .second(0)
-        .toDate();
+      // Get today's date at midnight local time for comparison
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
-      setEditedTask((prev) => ({ ...prev, deadline: newDate }));
+      // Create a comparison date with time set to midnight
+      const dateToCheck = new Date(year, month - 1, day);
+      dateToCheck.setHours(0, 0, 0, 0);
       
+      // Compare dates by timestamp for accurate day comparison
+      if (dateToCheck.getTime() < today.getTime()) {
+        setErrors(prev => ({
+          ...prev,
+          deadline: 'Deadline cannot be in the past'
+        }));
+        return;
+      }
+      
+      // Clear any previous deadline errors
       if (errors.deadline) {
         setErrors(prev => ({ ...prev, deadline: null }));
       }
+      
+      // If we have an existing deadline, preserve its time
+      if (editedTask.deadline) {
+        const existingDate = new Date(editedTask.deadline);
+        // Extract hours and minutes from existing date
+        newDate.setHours(existingDate.getHours());
+        newDate.setMinutes(existingDate.getMinutes());
+      } else {
+        // Set default time to 5:00 PM if no existing deadline
+        newDate.setHours(17);
+        newDate.setMinutes(0);
+      }
+      
+      // Update the task with the new deadline
+      const deadline = newDate.toISOString();
+      
+      setEditedTask(prev => ({
+        ...prev,
+        deadline
+      }));
     } catch (error) {
-      console.error("Error setting date:", error);
+      setErrors(prev => ({
+        ...prev,
+        deadline: 'Invalid date format'
+      }));
     }
-  };
-
-  const handleSubmit = () => {
+  }, [editedTask.deadline, errors.deadline]);
+  
+  // Handle form submission - memoized
+  const handleSubmit = useCallback(() => {
+    // Validate the form first
     if (!validateForm()) {
       return;
     }
     
+    // Submit the task update
     onUpdate(editedTask);
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    if (!task.title && !task.description && !task.deadline) {
-      onCancel(task.id);
-      return;
+  }, [editedTask, onUpdate]);
+  
+  // Handle cancel - memoized
+  const handleCancel = useCallback(() => {
+    if (task.title === '' && task.description === '' && !task.deadline) {
+      // If this is a brand new empty task, delete it
+      onDelete();
+    } else {
+      // Otherwise just cancel editing
+      setIsEditing(false);
+      setEditedTask(task);
     }
-    
-    setEditedTask(task);
-    setIsEditing(false);
-    setErrors({});
-  };
-
-  const handleDelete = (e) => {
+  }, [task, onDelete]);
+  
+  // Handle delete - memoized
+  const handleDelete = useCallback((e) => {
     e.stopPropagation();
-    e.preventDefault();
     
-    if (onCancel) {
-      onCancel(task.id);
+    if (onDelete) {
+      onDelete();
     }
-  };
-
-  const validateForm = () => {
+  }, [onDelete]);
+  
+  // Validate form - memoized
+  const validateForm = useCallback(() => {
     const newErrors = {};
     
-    if (!editedTask.title?.trim()) {
+    // Title is required
+    if (!editedTask.title.trim()) {
       newErrors.title = 'Title is required';
     }
     
-    if (!editedTask.description?.trim()) {
-      newErrors.description = 'Description is required';
-    }
-    
+    // Deadline is required
     if (!editedTask.deadline) {
       newErrors.deadline = 'Deadline is required';
+    } else {
+      // Create a date object from the deadline (in the user's local timezone)
+      const deadlineDate = new Date(editedTask.deadline);
+      
+      // Create a date representing today at midnight in local timezone
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      
+      // Create a copy of the deadline date with time set to midnight
+      const deadlineMidnight = new Date(
+        deadlineDate.getFullYear(),
+        deadlineDate.getMonth(),
+        deadlineDate.getDate(),
+        0, 0, 0, 0
+      );
+      
+      // Compare only the date portion (midnight to midnight)
+      if (deadlineMidnight.getTime() < now.getTime()) {
+        newErrors.deadline = 'Deadline cannot be in the past';
+      }
     }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const formatDateForInput = (date) => {
+  }, [editedTask.title, editedTask.deadline]);
+  
+  // Format date for input - memoized
+  const formatDateForInput = useCallback((date) => {
     if (!date) return '';
-    const d = dayjs(date);
-    return d.format('YYYY-MM-DD');
-  };
+    
+    // Convert date to a date object
+    const dateObj = new Date(date);
+    
+    // Format as YYYY-MM-DD in local timezone
+    const year = dateObj.getFullYear();
+    // getMonth() is 0-indexed, so add 1
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    
+    const formattedDate = `${year}-${month}-${day}`;
+    return formattedDate;
+  }, []);
   
-  const formatDateForDisplay = (date) => {
+  // Format date for display - memoized
+  const formatDateForDisplay = useCallback((date) => {
     if (!date) return 'Select date';
-    const d = dayjs(date);
-    return d.format('MMM D, YYYY');
-  };
+    try {
+      // Try to parse the date whether it's an ISO string, Date object, or other format
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) {
+        return 'Select date';
+      }
+      return format(dateObj, 'MMM d, yyyy');
+    } catch (error) {
+      return 'Select date';
+    }
+  }, []);
   
-  const formatTimeForDisplay = (date) => {
-    if (!date) return '12:00 PM';
+  // Format time for display - memoized
+  const formatTimeForDisplay = useCallback((date) => {
+    if (!date) return '';
+    return format(new Date(date), 'h:mm a');
+  }, []);
+  
+  // Close menus when clicking outside - memoized
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close date picker if clicking outside
+      if (showDatePicker && dateButtonRef.current && 
+          !dateButtonRef.current.contains(event.target)) {
+        setShowDatePicker(false);
+      }
+      
+      // Close time picker if clicking outside
+      if (showTimePicker && timeButtonRef.current &&
+          !timeButtonRef.current.contains(event.target)) {
+        setShowTimePicker(false);
+      }
+      
+      // Close menu if clicking outside
+      if (isMenuOpen && menuRef.current && 
+          !menuRef.current.contains(event.target)) {
+        setIsMenuOpen(false);
+      }
+    };
     
-    const d = new Date(date);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDatePicker, showTimePicker, isMenuOpen]);
+  
+  // Calculate whether task is past deadline - memoized
+  const isPastDeadline = useMemo(() => {
+    if (!task.deadline) return false;
+    const deadline = new Date(task.deadline);
+    const now = new Date();
+    return deadline < now;
+  }, [task.deadline]);
+  
+  // Calculate task badge style - memoized
+  const taskBadgeStyle = useMemo(() => {
+    if (isPastDeadline) {
+      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+    }
+    if (task.deadline) {
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+    }
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+  }, [isPastDeadline, task.deadline]);
     
-    let hours = d.getHours();
-    const minutes = d.getMinutes().toString().padStart(2, '0');
-    const period = hours >= 12 ? 'PM' : 'AM';
-    
-    hours = hours % 12;
-    hours = hours === 0 ? 12 : hours;
-    
-    return `${hours}:${minutes} ${period}`;
-  };
-
   if (!isEditing && !task.title && !task.description && !task.deadline) {
     return null;
   }
 
   return (
     <div
-      ref={taskRef}
-      id={`task-${task.id}`}
       className={`group bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 shadow-lg shadow-gray-200/40 dark:shadow-gray-900/40 border ${
         task.isEditing 
           ? 'border-blue-300/50 dark:border-blue-700/50 ring-2 ring-blue-200/50 dark:ring-blue-800/30' 
@@ -715,16 +908,9 @@ export default function Task(props) {
         setTimeout(() => {
           e.target.classList.add('opacity-50');
         }, 0);
-        
-        if (onDragStart) {
-          onDragStart(task.id);
-        }
       }}
       onDragEnd={(e) => {
         e.target.classList.remove('opacity-50');
-        if (onDragEnd) {
-          onDragEnd(task.id);
-        }
       }}
     >
       {isEditing ? (
@@ -732,7 +918,6 @@ export default function Task(props) {
         <div className="space-y-3">
           <div>
             <input
-              ref={titleInputRef}
               type="text"
               name="title"
               value={editedTask.title || ''}
@@ -763,22 +948,14 @@ export default function Task(props) {
             <label className="text-sm text-gray-600 dark:text-gray-300 mb-1 block">Deadline:</label>
             <div className="flex flex-wrap gap-2">
               <div className="flex-grow min-w-[140px] relative">
-                <button
-                  ref={dateButtonRef}
-                  type="button"
-                  onClick={() => setDatePickerOpen(!datePickerOpen)}
-                  className={`w-full px-3 py-2 border flex justify-between items-center ${errors.deadline ? 'border-red-500 dark:border-red-700' : 'border-gray-300/50 dark:border-gray-600/50'} rounded-lg bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:focus:ring-blue-600/50 text-sm text-left`}
-                >
-                  <span>{formatDateForDisplay(editedTask.deadline)}</span>
-                  <CalendarIcon className="h-4 w-4 ml-1 text-gray-400" />
-                </button>
-                
-                <DatePicker
-                  value={editedTask.deadline}
+                <input
+                  type="date"
+                  name="deadline-date"
+                  placeholder="Required"
+                  value={editedTask.deadline ? formatDateForInput(editedTask.deadline) : ''}
+                  min={formatDateForInput(new Date())}
                   onChange={handleDateChange}
-                  buttonRef={dateButtonRef}
-                  isOpen={datePickerOpen}
-                  onToggle={setDatePickerOpen}
+                  className={`w-full px-3 py-2 border ${errors.deadline ? 'border-red-500 dark:border-red-700' : 'border-gray-300/50 dark:border-gray-600/50'} rounded-lg bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:focus:ring-blue-600/50 text-sm dark:[color-scheme:dark]`}
                 />
               </div>
               
@@ -795,7 +972,18 @@ export default function Task(props) {
               </div>
             </div>
             {errors.deadline && (
-              <p className="mt-1 text-sm text-red-500 dark:text-red-400">{errors.deadline}</p>
+              <p className={`mt-2 text-sm ${errors.deadline.includes('past') ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg flex items-center' : 'text-red-500 dark:text-red-400'}`}>
+                {errors.deadline.includes('past') ? (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    {errors.deadline} - Please select a future date and time
+                  </>
+                ) : (
+                  errors.deadline
+                )}
+              </p>
             )}
           </div>
           <div className="flex justify-end space-x-2 pt-2">
@@ -824,6 +1012,7 @@ export default function Task(props) {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  e.preventDefault();
                   setIsEditing(true);
                 }}
                 className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
@@ -835,8 +1024,8 @@ export default function Task(props) {
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  if (onCancel) {
-                    onCancel(task.id);
+                  if (onDelete) {
+                    onDelete();
                   }
                 }}
                 className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
@@ -868,11 +1057,11 @@ export default function Task(props) {
           </div>
           
           {/* Drag handle indicator */}
-          <div className="absolute top-1 left-1 text-gray-300 dark:text-gray-600 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute top-1 left-1 text-gray-400 dark:text-gray-500 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 transform group-hover:scale-110">
             <ArrowsPointingOutIcon className="h-3 w-3" />
           </div>
         </div>
       )}
     </div>
   );
-} 
+}); 

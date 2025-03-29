@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import Task from './Task';
@@ -58,7 +58,7 @@ const scrollbarStyles = `
   }
 `;
 
-const Column = React.forwardRef(({ 
+const Column = React.memo(React.forwardRef(({ 
   id, 
   title, 
   tasks, 
@@ -97,42 +97,42 @@ const Column = React.forwardRef(({
     }
   }, []);
   
-  // Check if we're on mobile
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 640;
-      setIsMobile(mobile);
-      
-      // Reset the current task index when switching to mobile
-      if (mobile) {
-        setCurrentTaskIndex(0);
-      }
-    };
+  // Check if we're on mobile - memoize the resize handler
+  const checkMobile = useCallback(() => {
+    const mobile = window.innerWidth < 640;
+    setIsMobile(mobile);
     
+    // Reset the current task index when switching to mobile
+    if (mobile) {
+      setCurrentTaskIndex(0);
+    }
+  }, []);
+  
+  useEffect(() => {
     // Initialize
     checkMobile();
     
     // Update on resize
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, [checkMobile]);
+  
+  // Handle scroll event to update the current task index - memoize the scroll handler
+  const handleScroll = useCallback(() => {
+    if (taskListRef.current) {
+      const scrollLeft = taskListRef.current.scrollLeft;
+      const itemWidth = taskListRef.current.offsetWidth;
+      const newIndex = Math.round(scrollLeft / itemWidth);
+      setCurrentTaskIndex(newIndex);
+    }
   }, []);
   
-  // Handle scroll event to update the current task index
   useEffect(() => {
     if (isMobile && taskListRef.current) {
-      const handleScroll = () => {
-        if (taskListRef.current) {
-          const scrollLeft = taskListRef.current.scrollLeft;
-          const itemWidth = taskListRef.current.offsetWidth;
-          const newIndex = Math.round(scrollLeft / itemWidth);
-          setCurrentTaskIndex(newIndex);
-        }
-      };
-      
       taskListRef.current.addEventListener('scroll', handleScroll);
       return () => taskListRef.current?.removeEventListener('scroll', handleScroll);
     }
-  }, [isMobile, tasks.length]);
+  }, [isMobile, tasks.length, handleScroll]);
 
   // Sync local state with parent prop whenever the parent state changes
   useEffect(() => {
@@ -145,23 +145,23 @@ const Column = React.forwardRef(({
     id: id,
   });
 
-  const handleTaskCancel = (taskId) => {
+  const handleTaskCancel = useCallback((taskId) => {
     if (onTaskDelete) {
       onTaskDelete(taskId);
     }
-  };
+  }, [onTaskDelete]);
 
   // This function explicitly toggles the local collapse state
   // If parent provided a callback, use it, otherwise manage state locally
-  const handleToggleCollapse = (e) => {
+  const handleToggleCollapse = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     
     setLocalCollapsed(prevState => !prevState);
-  };
+  }, []);
 
-  // Determine column color based on ID
-  const getColumnColor = () => {
+  // Determine column color based on ID - memoized to avoid recalculation
+  const columnColor = useMemo(() => {
     switch(id) {
       case 'todo':
         return 'from-blue-50 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/20';
@@ -174,10 +174,10 @@ const Column = React.forwardRef(({
       default:
         return 'from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50';
     }
-  };
+  }, [id]);
 
-  // Get matching border color
-  const getBorderColor = () => {
+  // Get matching border color - memoized to avoid recalculation
+  const borderColor = useMemo(() => {
     switch(id) {
       case 'todo':
         return 'border-blue-300/50 dark:border-blue-800/50';
@@ -190,10 +190,10 @@ const Column = React.forwardRef(({
       default:
         return 'border-gray-200 dark:border-gray-700';
     }
-  };
+  }, [id]);
   
-  // Get header accent color
-  const getHeaderAccent = () => {
+  // Get header accent color - memoized to avoid recalculation
+  const headerAccent = useMemo(() => {
     switch(id) {
       case 'todo':
         return 'bg-blue-200/30 dark:bg-blue-900/30';
@@ -206,16 +206,14 @@ const Column = React.forwardRef(({
       default:
         return 'bg-gray-100 dark:bg-gray-800';
     }
-  };
+  }, [id]);
   
-  const handleHeaderClick = (e) => {
-    // Only toggle if clicking the header itself or the chevron
-    if (e.target.closest('.column-header')) {
-      onToggleCollapse();
-    }
-  };
+  const handleHeaderClick = useCallback((e) => {
+    // Call the onToggleCollapse directly when the header is clicked
+    onToggleCollapse();
+  }, [onToggleCollapse]);
 
-  const handleDragOver = (e) => {
+  const handleDragOver = useCallback((e) => {
     // Prevent default to allow drop
     e.preventDefault();
     e.stopPropagation();
@@ -226,17 +224,17 @@ const Column = React.forwardRef(({
     if (!isDragOver) {
       setIsDragOver(true);
     }
-  };
+  }, [isDragOver]);
 
-  const handleDragLeave = (e) => {
+  const handleDragLeave = useCallback((e) => {
     // Only consider it a leave if we're leaving the column
     // and not just moving between its children
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setIsDragOver(false);
     }
-  };
+  }, []);
 
-  const handleDrop = (e) => {
+  const handleDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     
@@ -246,10 +244,10 @@ const Column = React.forwardRef(({
     if (taskId && onTaskDrop) {
       onTaskDrop(taskId, id);
     }
-  };
+  }, [onTaskDrop, id]);
 
   // Navigate to the previous task (mobile only)
-  const goToPrevTask = (e) => {
+  const goToPrevTask = useCallback((e) => {
     e.stopPropagation();
     if (isMobile && taskListRef.current && currentTaskIndex > 0) {
       const newIndex = currentTaskIndex - 1;
@@ -260,10 +258,10 @@ const Column = React.forwardRef(({
       });
       setCurrentTaskIndex(newIndex);
     }
-  };
+  }, [isMobile, currentTaskIndex]);
   
   // Navigate to the next task (mobile only)
-  const goToNextTask = (e) => {
+  const goToNextTask = useCallback((e) => {
     e.stopPropagation();
     if (isMobile && taskListRef.current && currentTaskIndex < tasks.length - 1) {
       const newIndex = currentTaskIndex + 1;
@@ -274,13 +272,16 @@ const Column = React.forwardRef(({
       });
       setCurrentTaskIndex(newIndex);
     }
-  };
+  }, [isMobile, currentTaskIndex, tasks.length]);
 
   // Handle column title toggle for collapse/expand
-  const handleToggleClick = () => {
+  const handleToggleClick = useCallback(() => {
     // Pass the current collapsed state to the parent so it knows what to change it to
     onToggleCollapse();
-  };
+  }, [onToggleCollapse]);
+  
+  // Memoize task IDs array for SortableContext to prevent unnecessary re-renders
+  const taskIds = useMemo(() => tasks.map(task => task.id), [tasks]);
 
   return (
     <div 
@@ -289,14 +290,20 @@ const Column = React.forwardRef(({
       className={`bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm rounded-xl shadow-lg border ${
         isDragOver 
           ? 'border-blue-400/70 dark:border-blue-500/70 bg-blue-50/30 dark:bg-blue-900/30' 
-          : 'border-gray-200/50 dark:border-gray-700/50'
-      } overflow-hidden transition-all duration-300 ease-in-out ${className}`}
+          : borderColor
+      } overflow-hidden transition-all duration-300 ease-in-out ${className} ${
+        isCollapsed ? 'h-[56px] border-2' : ''
+      }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div 
-        className="column-header flex items-center justify-between p-4 bg-gray-50/80 dark:bg-gray-800/80 cursor-pointer sticky top-0 z-10"
+        className={`column-header flex items-center justify-between p-4 ${
+          isCollapsed 
+            ? `bg-gradient-to-r ${columnColor}` 
+            : 'bg-gray-50/80 dark:bg-gray-800/80'
+        } cursor-pointer sticky top-0 z-10`}
         onClick={handleHeaderClick}
       >
         <div className="flex items-center gap-2 overflow-hidden">
@@ -323,96 +330,129 @@ const Column = React.forwardRef(({
       
       <div 
         className={`transition-all duration-300 ease-in-out overflow-hidden ${
-          isCollapsed ? 'max-h-0' : 'max-h-[1000px]'
+          isCollapsed ? 'max-h-0 opacity-0 m-0 p-0' : 'max-h-[80vh] opacity-100'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {isMobile && !isCollapsed && tasks.length > 1 ? (
-          <div className="relative px-1 pt-1 pb-6">
-            {/* Swipeable container */}
+        {isMobile ? (
+          // Mobile view - swipeable horizontal task list
+          <div className="p-3">
             <div 
-              ref={taskListRef}
-              className="overflow-x-auto flex snap-x snap-mandatory scrollbar-hide"
-              style={{ scrollSnapType: 'x mandatory' }}
+              className="relative overflow-hidden"
+              ref={setNodeRef}
             >
-              {tasks.map((task) => (
-                <div 
-                  key={task.id} 
-                  className="w-full flex-shrink-0 snap-center p-3"
-                  style={{ scrollSnapAlign: 'center' }}
-                >
-                  <Task
-                    key={task.id}
-                    task={task}
-                    onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
-                    onCancel={onTaskDelete}
-                  />
+              {/* Task swiper */}
+              <div 
+                ref={taskListRef}
+                className="task-swiper flex overflow-x-auto pb-4 pt-2"
+              >
+                {tasks.length > 0 ? (
+                  tasks.map((task) => (
+                    <div key={task.id} className="px-1 flex-shrink-0 w-full">
+                      <Task
+                        task={task}
+                        onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
+                        onDelete={() => handleTaskCancel(task.id)}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div className="w-full px-1">
+                    <div className="rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 p-4 text-center">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No tasks yet</p>
+                      <button 
+                        onClick={() => onAddTask()}
+                        className="mt-2 text-xs text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
+                      >
+                        Add a task
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Pagination controls for mobile */}
+              {tasks.length > 1 && (
+                <div className="flex justify-between items-center mt-2">
+                  <button 
+                    className={`p-1 rounded-full ${
+                      currentTaskIndex > 0 
+                      ? 'text-gray-500 dark:text-gray-400' 
+                      : 'text-gray-300 dark:text-gray-600 cursor-default'
+                    }`}
+                    onClick={goToPrevTask}
+                    disabled={currentTaskIndex === 0}
+                  >
+                    <ChevronLeftIcon className="h-5 w-5" />
+                  </button>
+                  
+                  <div className="flex space-x-1 justify-center">
+                    {tasks.map((_, idx) => (
+                      <div 
+                        key={idx}
+                        className={`h-1.5 rounded-full transition-all ${
+                          idx === currentTaskIndex 
+                          ? 'bg-blue-500 dark:bg-blue-400 w-4' 
+                          : 'bg-gray-300 dark:bg-gray-600 w-1.5'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  
+                  <button 
+                    className={`p-1 rounded-full ${
+                      currentTaskIndex < tasks.length - 1
+                      ? 'text-gray-500 dark:text-gray-400' 
+                      : 'text-gray-300 dark:text-gray-600 cursor-default'
+                    }`}
+                    onClick={goToNextTask}
+                    disabled={currentTaskIndex >= tasks.length - 1}
+                  >
+                    <ChevronRightIcon className="h-5 w-5" />
+                  </button>
                 </div>
-              ))}
+              )}
             </div>
-            
-            {/* Navigation buttons */}
-            {tasks.length > 1 && (
-              <div className="absolute inset-x-0 top-1/2 transform -translate-y-1/2 flex justify-between px-1 pointer-events-none">
-                <button 
-                  onClick={goToPrevTask}
-                  className={`p-1.5 rounded-full bg-white/70 dark:bg-gray-800/70 shadow-md pointer-events-auto ${currentTaskIndex === 0 ? 'opacity-30' : 'opacity-80'} backdrop-blur-sm`}
-                  disabled={currentTaskIndex === 0}
-                  aria-label="Previous task"
-                >
-                  <ChevronLeftIcon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
-                </button>
-                
-                <button 
-                  onClick={goToNextTask}
-                  className={`p-1.5 rounded-full bg-white/70 dark:bg-gray-800/70 shadow-md pointer-events-auto ${currentTaskIndex === tasks.length - 1 ? 'opacity-30' : 'opacity-80'} backdrop-blur-sm`}
-                  disabled={currentTaskIndex === tasks.length - 1}
-                  aria-label="Next task"
-                >
-                  <ChevronRightIcon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
-                </button>
-              </div>
-            )}
-            
-            {/* Page indicator dots */}
-            {tasks.length > 1 && (
-              <div className="absolute bottom-1 inset-x-0 flex justify-center gap-1 py-1">
-                {tasks.map((_, index) => (
-                  <div 
-                    key={index}
-                    className={`h-1.5 rounded-full ${
-                      currentTaskIndex === index 
-                        ? 'bg-blue-500/80 dark:bg-blue-400/80 w-4' 
-                        : 'bg-gray-300/80 dark:bg-gray-600/80 w-2'
-                    } transition-all duration-200`}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         ) : (
-          <div className="p-4 space-y-4">
-            {tasks.map((task) => (
-              <Task
-                key={task.id}
-                task={task}
-                onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
-                onCancel={onTaskDelete}
-              />
-            ))}
-            
-            {tasks.length === 0 && (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p>No tasks yet</p>
-                <p className="text-sm mt-1">Add or drag tasks here</p>
-              </div>
-            )}
+          // Desktop view - vertical list of tasks
+          <div 
+            className="p-3 custom-scrollbar overflow-y-auto max-h-[calc(100vh-220px)]"
+            ref={setNodeRef}
+          >
+            <SortableContext 
+              items={taskIds} 
+              strategy={verticalListSortingStrategy}
+            >
+              {tasks.length > 0 ? (
+                <div className="space-y-3">
+                  {tasks.map((task) => (
+                    <Task
+                      key={task.id}
+                      task={task}
+                      onUpdate={(updatedTask) => onTaskUpdate(task.id, updatedTask)}
+                      onDelete={() => handleTaskCancel(task.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 p-4 text-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No tasks yet</p>
+                  <button 
+                    onClick={() => onAddTask()}
+                    className="mt-2 text-xs text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
+                  >
+                    Add a task
+                  </button>
+                </div>
+              )}
+            </SortableContext>
           </div>
         )}
       </div>
     </div>
   );
-});
+}));
 
 Column.displayName = 'Column';
 
