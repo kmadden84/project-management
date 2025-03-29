@@ -265,8 +265,11 @@ function TimeDropdown({ isOpen, onClose, timeOptions, selectedIndex, onSelect, b
 // For time selection - completely new implementation
 const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
+  const [inputValue, setInputValue] = useState('');
   const buttonRef = useRef(null);
   const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
 
   // Close when clicking outside
   useEffect(() => {
@@ -275,9 +278,11 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
         buttonRef.current && 
         !buttonRef.current.contains(event.target) &&
         dropdownRef.current && 
-        !dropdownRef.current.contains(event.target)
+        !dropdownRef.current.contains(event.target) &&
+        (!inputRef.current || !inputRef.current.contains(event.target))
       ) {
         setIsOpen(false);
+        setManualEntry(false);
       }
     };
 
@@ -350,19 +355,124 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
     setIsOpen(false);
   };
 
+  // Handle manual time entry
+  const handleManualTimeEntry = () => {
+    // Parse the input value (expected format: 1:30 PM or 13:30)
+    try {
+      const timeRegex = /^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i;
+      const match = inputValue.match(timeRegex);
+      
+      if (!match) {
+        console.error('Invalid time format');
+        return;
+      }
+      
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const period = match[3]?.toUpperCase();
+      
+      // Validate hours and minutes
+      if (period) {
+        // 12-hour format
+        if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) {
+          console.error('Invalid time values');
+          return;
+        }
+        
+        // Convert to 24-hour format
+        if (period === 'PM' && hours < 12) {
+          hours += 12;
+        } else if (period === 'AM' && hours === 12) {
+          hours = 0;
+        }
+      } else {
+        // 24-hour format
+        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+          console.error('Invalid time values');
+          return;
+        }
+      }
+      
+      // Create a new date
+      let date;
+      if (value) {
+        date = new Date(value);
+      } else {
+        date = new Date();
+      }
+      
+      // Set the time components
+      date.setHours(hours);
+      date.setMinutes(minutes);
+      date.setSeconds(0);
+      date.setMilliseconds(0);
+      
+      // Call the onChange handler with the new date
+      onChange(date);
+      setManualEntry(false);
+      setIsOpen(false);
+    } catch (error) {
+      console.error('Error parsing time:', error);
+    }
+  };
+
+  // Handle manual input field change
+  const handleInputChange = (e) => {
+    setInputValue(e.target.value);
+  };
+
+  // Handle key press in manual input field
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleManualTimeEntry();
+    }
+  };
+
+  // Start manual entry mode
+  const startManualEntry = () => {
+    setManualEntry(true);
+    setInputValue(value ? formatTimeDisplay(value) : '');
+    // Focus on input after rendering
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
+  };
+
   return (
     <div className="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-3 py-2 border border-gray-300/50 dark:border-gray-600/50 rounded-lg bg-white/70 dark:bg-gray-800/70 text-gray-900 dark:text-white flex justify-between items-center"
-      >
-        <span className="text-sm">{value ? formatTimeDisplay(value) : buttonLabel}</span>
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+      {manualEntry ? (
+        <div className="flex">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={handleInputChange}
+            onKeyPress={handleKeyPress}
+            placeholder="1:30 PM"
+            className="w-full px-3 py-2 border border-gray-300/50 dark:border-gray-600/50 rounded-l-lg bg-white/70 dark:bg-gray-800/70 text-gray-900 dark:text-white text-sm"
+          />
+          <button
+            onClick={handleManualTimeEntry}
+            className="px-2 border border-l-0 border-gray-300/50 dark:border-gray-600/50 rounded-r-lg bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-300"
+          >
+            <CheckIcon className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-full px-3 py-2 border border-gray-300/50 dark:border-gray-600/50 rounded-lg bg-white/70 dark:bg-gray-800/70 text-gray-900 dark:text-white flex justify-between items-center"
+        >
+          <span className="text-sm">{value ? formatTimeDisplay(value) : buttonLabel}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
       
       {isOpen && createPortal(
         <div
@@ -378,6 +488,15 @@ const SimpleTimeSelector = ({ value, onChange, buttonLabel = '12:00 PM' }) => {
           }}
           className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg rounded-lg"
         >
+          {/* Manual entry option */}
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+            onClick={startManualEntry}
+          >
+            Enter time manually...
+          </button>
+          
           {/* AM Section */}
           <div className="p-1 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-xs font-medium text-gray-500 dark:text-gray-400">
             AM
