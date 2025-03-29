@@ -50,12 +50,12 @@ A modern, responsive task management and analytics application built with React 
 
 1. Clone the repository
 ```
-git clone https://github.com/kmadden84/Tasks-and-Analytics.git
+git clone https://github.com/kmadden84/project-management.git
 ```
 
 2. Navigate to the project directory
 ```
-cd Tasks-and-Analytics
+cd project-management
 ```
 
 3. Install dependencies
@@ -86,7 +86,7 @@ npm run deploy
 ```
 
 3. Your application will be built and deployed to the `gh-pages` branch
-4. After deployment, your application will be available at: https://kmadden84.github.io/Tasks-and-Analytics/
+4. After deployment, your application will be available at: https://kmadden84.github.io/project-management/
 
 ## Technologies Used
 
