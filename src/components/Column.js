@@ -157,13 +157,7 @@ const Column = React.forwardRef(({
     e.preventDefault();
     e.stopPropagation();
     
-    console.log(`Column ${id} toggle clicked, collapsed: ${isCollapsed}`);
-    
-    if (onToggleCollapse) {
-      onToggleCollapse();
-    } else {
-      setLocalCollapsed(prevState => !prevState);
-    }
+    setLocalCollapsed(prevState => !prevState);
   };
 
   // Determine column color based on ID
@@ -280,6 +274,12 @@ const Column = React.forwardRef(({
       });
       setCurrentTaskIndex(newIndex);
     }
+  };
+
+  // Handle column title toggle for collapse/expand
+  const handleToggleClick = () => {
+    // Pass the current collapsed state to the parent so it knows what to change it to
+    onToggleCollapse();
   };
 
   return (

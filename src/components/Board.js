@@ -2,9 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DndContext, closestCorners, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import Column from './Column';
-import { AdjustmentsHorizontalIcon, ChevronDownIcon, ExclamationTriangleIcon, SunIcon, MoonIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { AdjustmentsHorizontalIcon, ChevronDownIcon, ExclamationTriangleIcon, SunIcon, MoonIcon, CheckCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { CalendarIcon, ChartBarIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
+import { createPortal } from 'react-dom';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { useTheme } from './ThemeProvider';
+
+// Custom toast content with icon for board save
+const BoardSavedToast = () => (
+  <div className="flex items-center">
+    <CheckCircleIcon className="h-5 w-5 mr-2 text-green-600 dark:text-green-400" />
+    <span>Board state and preferences saved!</span>
+  </div>
+);
 
 const defaultColumns = [
   { id: 'todo', title: 'To Do', tasks: [] },
@@ -14,6 +26,14 @@ const defaultColumns = [
 ];
 
 export default function Board() {
+  const { theme, toggleTheme, saveThemePreference } = useTheme();
+  const [darkMode, setDarkMode] = useState(theme === 'dark');
+  
+  // Sync darkMode with theme from ThemeProvider
+  useEffect(() => {
+    setDarkMode(theme === 'dark');
+  }, [theme]);
+
   const [columns, setColumns] = useState(() => {
     // Try to load saved state from localStorage
     const savedState = localStorage.getItem('boardState');
@@ -22,12 +42,7 @@ export default function Board() {
   const [activeTask, setActiveTask] = useState(null);
   const [showOptions, setShowOptions] = useState(false);
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
-  const [darkMode, setDarkMode] = useState(
-    localStorage.getItem('darkMode') === 'true' || 
-    (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  );
   const [showThemeModal, setShowThemeModal] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [allColumnsCollapsed, setAllColumnsCollapsed] = useState(false);
   const [tasksSectionCollapsed, setTasksSectionCollapsed] = useState(false);
   const [analyticsSectionCollapsed, setAnalyticsSectionCollapsed] = useState(true);
@@ -101,31 +116,83 @@ export default function Board() {
     };
   }, [showOptions]);
 
-  // Apply dark mode to the document
+  // On initial mount only - ensure theme class is applied to document
+  useEffect(() => {
+    // Apply correct theme class to document
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    }
+  }, []);
+  
+  // This effect runs whenever darkMode changes to keep the DOM in sync
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
     }
-    localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
 
   // Save board state to localStorage
   const saveBoardState = () => {
+    // Save the board columns and tasks
     localStorage.setItem('boardState', JSON.stringify(columns));
-    setSaveSuccess(true);
-    setShowOptions(false);
     
-    // Hide success message after 2 seconds
-    setTimeout(() => {
-      setSaveSuccess(false);
-    }, 2000);
+    // Explicitly save the current theme preference
+    saveThemePreference();
+    
+    // Show toast with custom styling
+    toast(
+      <BoardSavedToast />, 
+      {
+        position: "top-center",
+        autoClose: 2000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        className: "backdrop-blur-sm bg-white/90 dark:bg-gray-800/90 text-gray-800 dark:text-gray-100 border border-gray-200/50 dark:border-gray-700/50 shadow-lg",
+        bodyClassName: "font-medium",
+        toastId: "board-saved", // Prevent duplicate toasts
+      }
+    );
+    
+    setShowOptions(false);
   };
 
   // Toggle dark mode
   const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
+    // Use the ThemeProvider's toggleTheme function to ensure consistency
+    toggleTheme();
+    
+    // Toast notification will be shown after the state updates
+    toast(
+      <div className="flex items-center">
+        {!darkMode ? 
+          <MoonIcon className="h-5 w-5 mr-2 text-indigo-300" /> : 
+          <SunIcon className="h-5 w-5 mr-2 text-amber-400" />
+        }
+        <span>Theme changed to {!darkMode ? 'Dark' : 'Light'} mode</span>
+      </div>, 
+      {
+        position: "top-center",
+        autoClose: 2000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        className: "backdrop-blur-sm bg-white/90 dark:bg-gray-800/90 text-gray-800 dark:text-gray-100 border border-gray-200/50 dark:border-gray-700/50 shadow-lg",
+        toastId: "theme-changed"
+      }
+    );
+    
     setShowThemeModal(false);
     setShowOptions(false);
   };
@@ -134,6 +201,60 @@ export default function Board() {
   const showThemeSelector = () => {
     setShowOptions(false);
     setShowThemeModal(true);
+  };
+
+  // Select light mode
+  const selectLightMode = () => {
+    // Only change if we're not already in light mode
+    if (darkMode) {
+      toggleTheme();
+      
+      toast(
+        <div className="flex items-center">
+          <SunIcon className="h-5 w-5 mr-2 text-amber-400" />
+          <span>Theme changed to Light mode</span>
+        </div>, 
+        {
+          position: "top-center",
+          autoClose: 2000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          className: "backdrop-blur-sm bg-white/90 dark:bg-gray-800/90 text-gray-800 dark:text-gray-100 border border-gray-200/50 dark:border-gray-700/50 shadow-lg",
+          toastId: "theme-light"
+        }
+      );
+    }
+    
+    setShowThemeModal(false);
+  };
+  
+  // Select dark mode
+  const selectDarkMode = () => {
+    // Only change if we're not already in dark mode
+    if (!darkMode) {
+      toggleTheme();
+      
+      toast(
+        <div className="flex items-center">
+          <MoonIcon className="h-5 w-5 mr-2 text-indigo-300" />
+          <span>Theme changed to Dark mode</span>
+        </div>, 
+        {
+          position: "top-center",
+          autoClose: 2000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          className: "backdrop-blur-sm bg-white/90 dark:bg-gray-800/90 text-gray-800 dark:text-gray-100 border border-gray-200/50 dark:border-gray-700/50 shadow-lg",
+          toastId: "theme-dark"
+        }
+      );
+    }
+    
+    setShowThemeModal(false);
   };
 
   // Cancel theme selection
@@ -159,8 +280,6 @@ export default function Board() {
 
   // Handle individual column collapse toggle - connected to the Column component
   const handleColumnToggle = (columnId, isCollapsed) => {
-    console.log(`Toggling column ${columnId}, current collapsed: ${isCollapsed}`);
-    
     // Allow all columns to be collapsible
     setColumnStates(prev => {
       const newState = {
@@ -168,7 +287,6 @@ export default function Board() {
         [columnId]: !prev[columnId]
       };
       
-      console.log('New column states:', newState);
       return newState;
     });
   };
@@ -522,17 +640,33 @@ export default function Board() {
 
   return (
     <div className="p-4 max-w-7xl mx-auto">
+      {/* Toast Container with explicit z-index */}
+      <ToastContainer
+        position="top-center"
+        autoClose={2000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={darkMode ? "dark" : "light"}
+        limit={3}
+        toastClassName="rounded-xl overflow-hidden shadow-lg"
+        style={{ zIndex: 9999 }}
+      />
+      
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white bg-gradient-to-r from-gray-900 to-blue-800 dark:from-blue-400 dark:to-indigo-300 bg-clip-text text-transparent">Tasks and Analytics</h1>
         
         <div className="relative" ref={optionsRef}>
-          <button 
+          <button
             onClick={() => setShowOptions(!showOptions)}
-            className="flex items-center space-x-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-4 py-2 rounded-xl shadow-md hover:shadow-lg transition-all border border-gray-200/50 dark:border-gray-700/50"
+            className="p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 bg-white/60 dark:bg-gray-800/60 rounded-xl shadow-sm hover:bg-white/90 dark:hover:bg-gray-800/90 backdrop-blur-sm transition-colors flex items-center gap-2"
           >
-            <AdjustmentsHorizontalIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-            <span className="text-gray-700 dark:text-gray-300 font-medium">Options</span>
-            <ChevronDownIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            <AdjustmentsHorizontalIcon className="h-6 w-6" />
+            <span className="hidden sm:inline">Options</span>
           </button>
           
           {showOptions && (
@@ -563,14 +697,6 @@ export default function Board() {
                   Save Board State
                 </button>
               </div>
-            </div>
-          )}
-          
-          {/* Save Success Toast Notification */}
-          {saveSuccess && (
-            <div className="absolute right-0 mt-2 bg-green-100/90 border border-green-200/50 text-green-800 rounded-xl px-4 py-2 flex items-center shadow-md backdrop-blur-sm dark:bg-green-900/80 dark:border-green-800/50 dark:text-green-100">
-              <CheckCircleIcon className="h-5 w-5 mr-2" />
-              <span>Board saved successfully!</span>
             </div>
           )}
         </div>
@@ -793,7 +919,7 @@ export default function Board() {
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Choose Theme</h3>
             <div className="grid grid-cols-2 gap-4 mb-6">
               <button
-                onClick={() => setDarkMode(false)}
+                onClick={selectLightMode}
                 className={`p-4 rounded-lg flex flex-col items-center justify-center transition-all ${
                   !darkMode ? 'ring-2 ring-blue-500 bg-blue-50/80' : 'bg-white/80 hover:bg-gray-50/80 border border-gray-200/50'
                 }`}
@@ -802,7 +928,7 @@ export default function Board() {
                 <span className="text-gray-800 font-medium">Light Mode</span>
               </button>
               <button
-                onClick={() => setDarkMode(true)}
+                onClick={selectDarkMode}
                 className={`p-4 rounded-lg flex flex-col items-center justify-center transition-all ${
                   darkMode ? 'ring-2 ring-blue-500 bg-gray-700/80' : 'bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700/50'
                 }`}
@@ -817,12 +943,6 @@ export default function Board() {
                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100/80 dark:bg-gray-700/80 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors backdrop-blur-sm"
               >
                 Cancel
-              </button>
-              <button
-                onClick={toggleDarkMode}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600/90 hover:bg-blue-700 rounded-lg transition-colors backdrop-blur-sm shadow-sm"
-              >
-                Apply Theme
               </button>
             </div>
           </div>
